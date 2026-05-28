@@ -48,22 +48,15 @@ func InitManagers() (*cfg.Manager, *kernel.Manager, *api.Client, *subscription.M
 	km := kernel.NewManager(cm.ConfigDir(), cm.MihomoDir(), c.Core.APIPort)
 
 	if !km.IsInstalled() {
-		fmt.Fprintln(os.Stderr, "Extracting embedded mihomo kernel...")
 		if err := km.ExtractEmbedded(km.BinPath()); err != nil {
-			fmt.Fprintf(os.Stderr, "  Failed: %v\n", err)
-			fmt.Fprintln(os.Stderr, "  Install manually:")
-			fmt.Fprintln(os.Stderr, "    mihomo-cli kernel install --local <path>")
-			fmt.Fprintf(os.Stderr, "  Expected path: %s\n", km.BinPath())
-			fmt.Fprintln(os.Stderr, "")
-		} else {
-			fmt.Fprintf(os.Stderr, "Kernel ready: %s\n", km.BinPath())
+			fmt.Fprintf(os.Stderr, "error: extract kernel: %v\n", err)
+			fmt.Fprintf(os.Stderr, "  Install manually: mihomo-cli kernel install --local <path>\n")
 		}
 	}
 
 	if km.IsInstalled() && !km.IsRunning() {
-		fmt.Fprintln(os.Stderr, "Starting mihomo...")
 		if err := km.Start(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: could not start mihomo: %v\n", err)
+			fmt.Fprintf(os.Stderr, "error: start mihomo: %v\n", err)
 		}
 	}
 

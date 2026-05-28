@@ -201,19 +201,41 @@ func (m *Manager) Start() error {
 	defer m.mu.Unlock()
 
 	if m.cmd != nil {
-		return fmt.Errorf("mihomo is already running")
+		return nil // already started by us
+	}
+
+	// Check if another mihomo is already running and responsive.
+	if m.probe() {
+		m.apiClient = api.NewClient(fmt.Sprintf(apiBaseURL, m.apiPort))
+		return nil
 	}
 
 	if err := os.MkdirAll(m.workDir, 0755); err != nil {
 		return fmt.Errorf("create work dir: %w", err)
 	}
 
+	// Redirect mihomo logs to file so they don't flood the terminal.
+	logDir := filepath.Join(m.workDir, "logs")
+	os.MkdirAll(logDir, 0755)
+	logFile, err := os.Create(filepath.Join(logDir, "mihomo.log"))
+	if err != nil {
+		logFile = nil
+	}
+
 	configPath := filepath.Join(m.workDir, "config.yaml")
 	m.cmd = exec.Command(m.binPath, "-d", m.workDir, "-f", configPath)
-	m.cmd.Stdout = os.Stdout
-	m.cmd.Stderr = os.Stderr
+	if logFile != nil {
+		m.cmd.Stdout = logFile
+		m.cmd.Stderr = logFile
+	} else {
+		m.cmd.Stdout = os.Stderr
+		m.cmd.Stderr = os.Stderr
+	}
 
 	if err := m.cmd.Start(); err != nil {
+		if logFile != nil {
+			logFile.Close()
+		}
 		m.cmd = nil
 		return fmt.Errorf("start mihomo: %w", err)
 	}
@@ -248,20 +270,40 @@ func (m *Manager) Restart() error {
 }
 
 // IsRunning checks if mihomo is running and responsive.
+// It works even when mihomo was started by a previous invocation.
 func (m *Manager) IsRunning() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.apiClient == nil {
+	if m.apiClient != nil && m.apiClient.HealthCheck() == nil {
+		return true
+	}
+	return m.probe()
+}
+
+// probe checks if the mihomo API is responding (1s timeout).
+func (m *Manager) probe() bool {
+	c := &http.Client{Timeout: 1 * time.Second}
+	resp, err := c.Get(fmt.Sprintf(apiBaseURL+"/version", m.apiPort))
+	if err != nil {
 		return false
 	}
-	return m.apiClient.HealthCheck() == nil
+	resp.Body.Close()
+	return resp.StatusCode == 200
 }
 
 // APIClient returns the API client, or nil if mihomo is not running.
 func (m *Manager) APIClient() *api.Client {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.apiClient
+	if m.apiClient != nil {
+		return m.apiClient
+	}
+	// Try to connect to an externally-managed mihomo.
+	if m.probe() {
+		m.apiClient = api.NewClient(fmt.Sprintf(apiBaseURL, m.apiPort))
+		return m.apiClient
+	}
+	return nil
 }
 
 // Status returns a human-readable status string.
