@@ -99,7 +99,11 @@ func (m *Manager) UpdateSubscription(name string) error {
 		return fmt.Errorf("save profile: %w", err)
 	}
 
-	return m.cfg.UpdateSubscriptionTimestamp(name, time.Now().Unix())
+	if err := m.cfg.UpdateSubscriptionTimestamp(name, time.Now().Unix()); err != nil {
+		return fmt.Errorf("update timestamp: %w", err)
+	}
+
+	return m.MergeAndGenerate()
 }
 
 // UpdateAll updates all subscriptions.

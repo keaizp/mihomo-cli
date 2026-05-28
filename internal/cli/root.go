@@ -84,6 +84,8 @@ func ensureMihomo() (*api.Client, error) {
 	}
 
 	if !kernelMgr.IsRunning() {
+		// Generate initial mihomo config (with API port) before starting
+		subMgr.MergeAndGenerate()
 		if err := kernelMgr.Start(); err != nil {
 			return nil, fmt.Errorf("start mihomo: %w", err)
 		}
