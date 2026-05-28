@@ -35,7 +35,7 @@ type Manager struct {
 // NewManager creates a kernel manager.
 func NewManager(binDir, workDir string, apiPort int) *Manager {
 	return &Manager{
-		binPath: filepath.Join(binDir, "mihomo"),
+		binPath: filepath.Join(binDir, "bin", "mihomo"),
 		workDir: workDir,
 		apiPort: apiPort,
 	}
