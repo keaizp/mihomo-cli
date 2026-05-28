@@ -4,20 +4,57 @@ Linux 命令行代理管理工具，对标 Clash Verge 的全部功能。基于 
 
 ## 安装
 
-### 从源码编译
+### 1. 编译
 
 ```bash
 git clone <repo-url> && cd mihomo-cli
 go build -o mihomo-cli ./cmd/mihomo-cli/
-sudo mv mihomo-cli /usr/local/bin/
+```
+
+编译完成后，二进制文件在当前目录下：
+
+```bash
+# 临时使用（编译后直接运行）
+./mihomo-cli --help
+```
+
+### 2. 安装到 PATH（推荐）
+
+要像系统命令一样在任何目录直接使用，需要把二进制复制到 PATH 目录：
+
+```bash
+# 安装到 /usr/local/bin（对所有用户生效）
+sudo cp mihomo-cli /usr/local/bin/
+sudo chmod +x /usr/local/bin/mihomo-cli
+
+# 或者安装到当前用户的 ~/.local/bin
+mkdir -p ~/.local/bin
+cp mihomo-cli ~/.local/bin/
+# 确保 ~/.local/bin 在 PATH 中：export PATH="$HOME/.local/bin:$PATH"
+```
+
+安装后可以直接使用：
+
+```bash
+mihomo-cli --help
+```
+
+> **为什么出现 `command not found`？**  
+> Linux 只会搜索 PATH 环境变量中的目录（`echo $PATH` 查看）。  
+> 如果二进制不在这些目录里，就需要用 `./mihomo-cli` 带路径运行，或者安装到 PATH 目录。
+
+### 3. 验证安装
+
+```bash
+which mihomo-cli   # 应该输出 /usr/local/bin/mihomo-cli
+mihomo-cli --help   # 应该打印命令列表
 ```
 
 ### 依赖
 
-- Go 1.22+
+- Go 1.22+（仅编译时需要）
 - Linux（系统代理功能依赖 GNOME gsettings）
-
-首次运行会自动从 GitHub 下载 mihomo 内核，无需手动安装。
+- 首次运行会自动从 GitHub 下载 mihomo 内核（~15MB），无需手动安装
 
 ## 快速开始
 
