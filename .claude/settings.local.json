@@ -4,7 +4,31 @@
       "Bash(git -C /c/Users/15940/cc log --oneline -5)",
       "Bash(git init *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(go version *)",
+      "Read(//c/Program Files/Go/**)",
+      "Read(//c/Go/**)",
+      "Bash(find /c -maxdepth 4 -name \"go.exe\" -type f)",
+      "Bash(where go *)",
+      "Bash(find /c -maxdepth 3 -name \"go.exe\")",
+      "Bash(find /d -maxdepth 3 -name \"go.exe\")",
+      "Bash(winget install *)",
+      "Bash(\"/c/Program Files/Go/bin/go\" version)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(tasklist)",
+      "Bash(curl -L -o /tmp/go.zip \"https://go.dev/dl/go1.22.10.windows-amd64.zip\")",
+      "Bash(rm -rf /tmp/go)",
+      "Bash(unzip -q /tmp/go.zip -d /tmp/)",
+      "Bash(/tmp/go/bin/go version *)",
+      "Bash(./mihomo-cli *)",
+      "Bash(go build *)",
+      "Bash(\"/c/Program Files/Go/bin/go\" build ./cmd/mihomo-cli/)",
+      "Bash(/c/Program Files/Go/bin/go test *)",
+      "Bash(/c/Program Files/Go/bin/go mod *)",
+      "Bash(/c/Program Files/Go/bin/go env *)",
+      "Bash(\"/c/Program Files/Go/bin/go\" env GOPROXY)",
+      "Bash(\"/c/Program Files/Go/bin/go\" env GONOSUMCHECK)",
+      "Bash(GOPROXY=https://goproxy.cn,direct /c/Program Files/Go/bin/go mod *)"
     ]
   }
 }
