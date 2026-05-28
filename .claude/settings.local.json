@@ -31,7 +31,8 @@
       "Bash(GOPROXY=https://goproxy.cn,direct /c/Program Files/Go/bin/go mod *)",
       "Bash(/c/Program Files/Go/bin/go build *)",
       "Bash(git -C /c/Users/15940/cc add -A)",
-      "Bash(git -C /c/Users/15940/cc commit -m \"feat: mihomo REST API client\")"
+      "Bash(git -C /c/Users/15940/cc commit -m \"feat: mihomo REST API client\")",
+      "Bash(\"/c/Program Files/Go/bin/go\" vet ./...)"
     ]
   }
 }
