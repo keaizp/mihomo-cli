@@ -30,12 +30,6 @@ var rootCmd = &cobra.Command{
 	Use:   "mihomo-cli",
 	Short: "Manage mihomo proxy from the command line",
 	Long:  "A CLI tool for managing mihomo proxy subscriptions, nodes, modes, and service lifecycle.",
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if cmd.Name() == "help" || cmd.Name() == "completion" {
-			return nil
-		}
-		return initBaseManagers()
-	},
 	Run: func(cmd *cobra.Command, args []string) {
 		ac, err := ensureMihomo()
 		if err != nil {
@@ -55,9 +49,9 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// initBaseManagers initializes config, kernel, and subscription managers.
+// InitBase initializes config, kernel, and subscription managers.
 // Lightweight — does not start mihomo.
-func initBaseManagers() error {
+func InitBase() error {
 	if cfgMgr != nil {
 		return nil
 	}
