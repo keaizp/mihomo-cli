@@ -28,7 +28,10 @@
       "Bash(/c/Program Files/Go/bin/go env *)",
       "Bash(\"/c/Program Files/Go/bin/go\" env GOPROXY)",
       "Bash(\"/c/Program Files/Go/bin/go\" env GONOSUMCHECK)",
-      "Bash(GOPROXY=https://goproxy.cn,direct /c/Program Files/Go/bin/go mod *)"
+      "Bash(GOPROXY=https://goproxy.cn,direct /c/Program Files/Go/bin/go mod *)",
+      "Bash(/c/Program Files/Go/bin/go build *)",
+      "Bash(git -C /c/Users/15940/cc add -A)",
+      "Bash(git -C /c/Users/15940/cc commit -m \"feat: mihomo REST API client\")"
     ]
   }
 }
