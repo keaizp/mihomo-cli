@@ -214,6 +214,134 @@ mihomo-cli config edit
 mihomo-cli config reload
 ```
 
+## 代理端口与使用方式
+
+mihomo 启动后监听以下端口（可在 `~/.config/mihomo-cli/config.yaml` 中修改）：
+
+| 端口 | 类型 | 用途 |
+|------|------|------|
+| `7890` | Mixed（HTTP + SOCKS5） | 代理流量入口 |
+| `7891` | SOCKS5 | 独立 SOCKS5 代理 |
+| `9090` | REST API | mihomo-cli 内部通信 |
+
+### 让终端程序走代理
+
+mihomo 是代理服务器，不会自动接管系统流量。需要让其他程序知道代理地址：
+
+**临时设置（当前终端会话有效）：**
+
+```bash
+export http_proxy=http://127.0.0.1:7890
+export https_proxy=http://127.0.0.1:7890
+```
+
+**永久设置（加入 `~/.bashrc` 或 `~/.profile`）：**
+
+```bash
+echo 'export http_proxy=http://127.0.0.1:7890' >> ~/.bashrc
+echo 'export https_proxy=http://127.0.0.1:7890' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**取消代理：**
+
+```bash
+unset http_proxy https_proxy
+```
+
+或直接切直连模式（代理服务器继续运行但不转发到远程节点）：
+
+```bash
+mihomo-cli mode set direct
+```
+
+> **提示**：可以把开关绑成别名方便日常使用：
+> ```bash
+> alias proxy-on='export http_proxy=http://127.0.0.1:7890 https_proxy=http://127.0.0.1:7890'
+> alias proxy-off='unset http_proxy https_proxy'
+> ```
+
+### 让浏览器走代理
+
+在浏览器中安装代理切换插件（如 SwitchyOmega），添加代理配置：
+- 协议：HTTP，地址：`127.0.0.1`，端口：`7890`
+
+或在系统网络设置中手动配置 HTTP/HTTPS 代理为 `127.0.0.1:7890`。
+
+### 让 apt 走代理
+
+```bash
+sudo apt -o Acquire::http::Proxy="http://127.0.0.1:7890" update
+```
+
+### 让 git 走代理
+
+```bash
+git config --global http.proxy http://127.0.0.1:7890
+git config --global --unset http.proxy   # 取消
+```
+
+## 验证代理是否生效
+
+### 方法 1：对比 IP（最直观）
+
+```bash
+# 直连 IP
+curl -s https://ip.sb && echo "  ← 直连 IP"
+
+# 通过代理（7890 是 mixed 端口）
+curl -x http://127.0.0.1:7890 -s https://ip.sb && echo "  ← 代理 IP"
+
+# 通过 SOCKS5（7891 是 socks 端口）
+curl --socks5 127.0.0.1:7891 -s https://ip.sb && echo "  ← SOCKS5 代理 IP"
+```
+
+如果代理 IP 和直连 IP 不一样，代理生效。
+
+### 方法 2：延迟对比
+
+```bash
+# 直连 Google
+time curl -s -o /dev/null https://www.google.com
+
+# 通过代理
+time curl -s -o /dev/null -x http://127.0.0.1:7890 https://www.google.com
+
+# 通过 SOCKS5
+time curl -s -o /dev/null --socks5 127.0.0.1:7891 https://www.google.com
+```
+
+### 方法 3：节点延迟测试
+
+```bash
+mihomo-cli proxy test           # 测试所有节点
+mihomo-cli proxy test "HK-01"   # 测试指定节点
+```
+
+## 监控与调试
+
+### 查看实时连接
+
+```bash
+mihomo-cli conn list
+```
+
+可以看到每条连接的目标域名、协议、匹配规则、上下行流量。开着浏览器访问网站时再跑一下，就能看到新增的连接记录。
+
+### 查看运行日志
+
+```bash
+mihomo-cli service logs           # 最近的日志
+sudo tail -f /root/.config/mihomo-cli/mihomo/logs/mihomo.log  # 实时追踪
+```
+
+### 检查服务状态
+
+```bash
+mihomo-cli service status         # running / stopped
+ps -ef | grep mihomo              # 确认进程存在
+```
+
 ## TUI 交互界面
 
 直接运行 `mihomo-cli`（无参数）进入全屏 TUI：
@@ -295,7 +423,9 @@ user_rules: []           # 自定义规则
 
 ## 系统代理
 
-在 GNOME 桌面环境下，可以通过 `internal/sysproxy` 模块设置系统代理。代理开关后会自动调用 `gsettings` 设置 HTTP/HTTPS 代理。
+**Linux 服务器 / CLI 环境**：使用环境变量，见上文「代理端口与使用方式」一节。
+
+**GNOME 桌面环境**：可通过 `internal/sysproxy` 模块调用 `gsettings` 设置系统代理。
 
 ## 常见操作流程
 
