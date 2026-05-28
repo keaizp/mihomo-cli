@@ -14,6 +14,9 @@ go build -o mihomo-cli ./cmd/mihomo-cli/
 编译完成后，二进制文件在当前目录下：
 
 ```bash
+# go build 生成的二进制可能没有执行权限，需要手动添加
+chmod +x ./mihomo-cli
+
 # 临时使用（编译后直接运行）
 ./mihomo-cli --help
 ```
@@ -314,3 +317,46 @@ alias proxy-global='mihomo-cli mode set global'
 - 内核二进制存放在 `$XDG_CONFIG_HOME/mihomo-cli/mihomo`
 - 系统代理设置仅支持 GNOME 桌面环境（通过 gsettings）
 - mihomo 内核以子进程方式运行，退出 mihomo-cli 后内核继续运行。如需停止请使用 `mihomo-cli service stop`
+
+## 常见问题
+
+### `command not found`
+
+二进制不在 PATH 环境变量中。解决方法：
+
+```bash
+# 方案 A：安装到 PATH 目录（推荐）
+sudo cp mihomo-cli /usr/local/bin/
+mihomo-cli --help
+
+# 方案 B：在当前目录带路径运行
+./mihomo-cli --help
+```
+
+### `Permission denied`
+
+Linux 文件系统不会自动给新文件执行权限。解决方法：
+
+```bash
+chmod +x ./mihomo-cli
+./mihomo-cli --help
+```
+
+### 编译后 `go build` 生成的二进制也无法执行
+
+同上，某些场景下 `go build` 可能不保留执行位：
+
+```bash
+go build -o mihomo-cli ./cmd/mihomo-cli/
+chmod +x ./mihomo-cli    # 确保有执行权限
+```
+
+### 下载内核失败
+
+检查网络是否可达 GitHub：
+
+```bash
+curl -I https://github.com/MetaCubeX/mihomo/releases
+```
+
+如果网络受限，可以手动下载 mihomo 二进制放到 `~/.config/mihomo-cli/mihomo` 并确保有执行权限。
