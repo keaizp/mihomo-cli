@@ -35,7 +35,9 @@
       "Bash(\"/c/Program Files/Go/bin/go\" vet ./...)",
       "Bash(/c/Program Files/Go/bin/go get *)",
       "Bash(GOPROXY=https://goproxy.cn,direct \"/c/Program Files/Go/bin/go\" get github.com/charmbracelet/bubbletea github.com/charmbracelet/bubbles github.com/charmbracelet/lipgloss)",
-      "Bash(git -C /c/Users/15940/cc commit -m 'feat: TUI model, styles, and keybindings')"
+      "Bash(git -C /c/Users/15940/cc commit -m 'feat: TUI model, styles, and keybindings')",
+      "Bash(\"/c/Program Files/Go/bin/go\" build -o mihomo-cli.exe ./cmd/mihomo-cli/)",
+      "Bash(./mihomo-cli.exe *)"
     ]
   }
 }
