@@ -4,13 +4,15 @@ Linux 命令行代理管理工具，对标 Clash Verge 的全部功能。基于 
 
 ## 安装
 
-### 1. 编译
+### 1. 安装 mihomo-cli 本体
 
 **在 Linux 上直接编译：**
 
 ```bash
 git clone <repo-url> && cd mihomo-cli
 go build -o mihomo-cli ./cmd/mihomo-cli/
+chmod +x ./mihomo-cli
+sudo cp mihomo-cli /usr/local/bin/
 ```
 
 **在 Windows/macOS 上交叉编译 Linux 版本：**
@@ -23,15 +25,43 @@ $env:GOOS="linux"; $env:GOARCH="amd64"; go build -o mihomo-cli ./cmd/mihomo-cli/
 GOOS=linux GOARCH=amd64 go build -o mihomo-cli ./cmd/mihomo-cli/
 ```
 
-> **注意**：在 Windows 上编译默认生成 `.exe` 文件，那是 Windows 格式。必须用上面的交叉编译命令，带上 `GOOS=linux GOARCH=amd64` 才能生成 Linux 可用的二进制（无后缀）。
+> **注意**：在 Windows 上编译默认生成 `.exe` 文件，那是 Windows PE 格式，Linux 无法执行。必须用上面的交叉编译命令。
 
-编译完成后，二进制文件在当前目录下：
+### 2. 安装 mihomo 内核（必需）
+
+mihomo-cli 本身不包含代理内核，需要单独准备。**程序不会自动联网下载**（因为需要用代理的人网络本来就有问题）。
+
+**方案 A：手动下载（推荐，最可靠）**
+
+在你网络最好的时候，用浏览器或其他方式下载 mihomo 二进制，然后安装：
 
 ```bash
-# go build 生成的二进制可能没有执行权限，需要手动添加
-chmod +x ./mihomo-cli
+# 1. 查看期望的安装路径
+mihomo-cli kernel path
+# 输出: /home/ubuntu/.config/mihomo-cli/mihomo
 
-# 临时使用（编译后直接运行）
+# 2. 把下载好的 mihomo 复制过去
+mihomo-cli kernel install --local ./下载好的mihomo
+```
+
+mihomo 官方下载地址：[github.com/MetaCubeX/mihomo/releases](https://github.com/MetaCubeX/mihomo/releases)  
+需要下载 `mihomo-linux-amd64-<version>.gz`（文件名以 `.gz` 结尾的），无需手动解压。
+
+**方案 B：通过镜像下载**
+
+如果你有可用的镜像站：
+
+```bash
+mihomo-cli kernel install --url https://your-mirror.example.com/mihomo-linux-amd64.gz
+```
+
+**方案 C：直接下载（需要 GitHub 可达）**
+
+```bash
+mihomo-cli kernel install
+```
+
+会显示下载进度条，从 GitHub 直接拉取。
 ./mihomo-cli --help
 ```
 
@@ -71,11 +101,14 @@ mihomo-cli --help   # 应该打印命令列表
 
 - Go 1.22+（仅编译时需要）
 - Linux（系统代理功能依赖 GNOME gsettings）
-- 首次运行会自动从 GitHub 下载 mihomo 内核（~15MB），无需手动安装
+- mihomo 内核需手动安装，参见上方第 2 步
 
 ## 快速开始
 
 ```bash
+# 0. 安装 mihomo 内核（首次必须）
+mihomo-cli kernel install --local ./mihomo
+
 # 1. 添加订阅
 mihomo-cli sub add my-sub "https://your-subscription-url"
 
@@ -151,6 +184,22 @@ mihomo-cli proxy test "🇭🇰 HK-01"
 
 # 查看节点详情
 mihomo-cli proxy info "🇭🇰 HK-01"
+```
+
+### 内核管理 `kernel`
+
+```bash
+# 查看内核期待安装路径
+mihomo-cli kernel path
+
+# 从 GitHub 下载内核（需要网络可达 GitHub）
+mihomo-cli kernel install
+
+# 从镜像下载
+mihomo-cli kernel install --url https://mirror.example.com/mihomo.gz
+
+# 从本地文件安装（最常用：手动下载后安装）
+mihomo-cli kernel install --local ~/Downloads/mihomo-linux-amd64-v1.18.10.gz
 ```
 
 ### 服务控制 `service`
@@ -327,8 +376,7 @@ alias proxy-global='mihomo-cli mode set global'
 
 ## 注意事项
 
-- 首次运行会自动下载 mihomo 内核（~15MB），需要网络连接
-- 内核二进制存放在 `$XDG_CONFIG_HOME/mihomo-cli/mihomo`
+- mihomo 内核需手动安装，不会自动下载。安装路径用 `mihomo-cli kernel path` 查看
 - 系统代理设置仅支持 GNOME 桌面环境（通过 gsettings）
 - mihomo 内核以子进程方式运行，退出 mihomo-cli 后内核继续运行。如需停止请使用 `mihomo-cli service stop`
 

@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"compress/gzip"
 	"fmt"
 	"io"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,29 +41,56 @@ func NewManager(binDir, workDir string, apiPort int) *Manager {
 	}
 }
 
+// BinPath returns the expected path of the mihomo binary.
+func (m *Manager) BinPath() string { return m.binPath }
+
 // IsInstalled returns true if the mihomo binary exists.
 func (m *Manager) IsInstalled() bool {
 	_, err := os.Stat(m.binPath)
 	return err == nil
 }
 
-// Install downloads the mihomo binary from GitHub.
-func (m *Manager) Install() error {
-	if m.IsInstalled() {
-		return nil
+// InstallFrom copies a local binary to the managed path.
+func (m *Manager) InstallFrom(srcPath string) error {
+	if err := os.MkdirAll(filepath.Dir(m.binPath), 0755); err != nil {
+		return fmt.Errorf("create bin dir: %w", err)
 	}
+	src, err := os.Open(srcPath)
+	if err != nil {
+		return fmt.Errorf("open source: %w", err)
+	}
+	defer src.Close()
 
+	dst, err := os.Create(m.binPath)
+	if err != nil {
+		return fmt.Errorf("create destination: %w", err)
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		return fmt.Errorf("copy binary: %w", err)
+	}
+	return os.Chmod(m.binPath, 0755)
+}
+
+// defaultURL builds the default GitHub download URL for the current arch.
+func defaultURL() string {
 	arch := runtime.GOARCH
-	if arch == "amd64" {
-		arch = "amd64"
-	} else if arch == "arm64" {
-		arch = "arm64"
-	}
+	version := "v1.18.10"
+	return fmt.Sprintf("%s/download/%s/mihomo-linux-%s-%s.gz",
+		mihomoRepo, version, arch, version)
+}
 
-	url := fmt.Sprintf(
-		"%s/download/v1.18.10/mihomo-linux-%s-v1.18.10.gz",
-		mihomoRepo, arch,
-	)
+// Install downloads the mihomo binary from GitHub with a progress bar.
+func (m *Manager) Install() error {
+	return m.InstallFromURL(defaultURL())
+}
+
+// InstallFromURL downloads the mihomo binary from a custom URL with a progress bar.
+func (m *Manager) InstallFromURL(url string) error {
+	if err := os.MkdirAll(filepath.Dir(m.binPath), 0755); err != nil {
+		return fmt.Errorf("create bin dir: %w", err)
+	}
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -78,13 +107,28 @@ func (m *Manager) Install() error {
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
-	defer os.Remove(tmpPath)
 
-	if _, err := io.Copy(f, resp.Body); err != nil {
+	var success bool
+	defer func() {
 		f.Close()
+		if !success {
+			os.Remove(tmpPath)
+		}
+	}()
+
+	// Decompress gzip on the fly
+	gzReader, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		return fmt.Errorf("decompress gzip: %w", err)
+	}
+	defer gzReader.Close()
+
+	// Copy with progress bar
+	bar := &progressBar{reader: gzReader, total: resp.ContentLength, writer: os.Stderr}
+	if _, err := io.Copy(f, bar); err != nil {
 		return fmt.Errorf("write binary: %w", err)
 	}
-	f.Close()
+	fmt.Fprintln(os.Stderr) // newline after progress bar
 
 	if err := os.Chmod(tmpPath, 0755); err != nil {
 		return fmt.Errorf("chmod: %w", err)
@@ -93,7 +137,62 @@ func (m *Manager) Install() error {
 		return fmt.Errorf("rename: %w", err)
 	}
 
+	success = true
 	return nil
+}
+
+// progressBar wraps a reader and prints a progress bar to the writer.
+type progressBar struct {
+	reader io.Reader
+	total  int64
+	writer io.Writer
+	read   int64
+	last   time.Time
+}
+
+func (p *progressBar) Read(buf []byte) (int, error) {
+	n, err := p.reader.Read(buf)
+	p.read += int64(n)
+
+	// Throttle updates to ~10 per second
+	if p.last.IsZero() || time.Since(p.last) > 100*time.Millisecond || err != nil {
+		p.last = time.Now()
+		p.draw()
+	}
+	return n, err
+}
+
+func (p *progressBar) draw() {
+	barWidth := 40
+
+	var percent float64
+	if p.total > 0 {
+		percent = float64(p.read) / float64(p.total)
+	} else {
+		// Unknown total — use gzipped size as rough guide, or just show bytes
+		fmt.Fprintf(p.writer, "\r  %s downloaded\r", formatBytes(p.read))
+		return
+	}
+
+	filled := int(percent * float64(barWidth))
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+
+	fmt.Fprintf(p.writer, "\r  [%s] %.0f%%  %s/%s",
+		bar, percent*100,
+		formatBytes(p.read), formatBytes(p.total))
+}
+
+func formatBytes(n int64) string {
+	switch {
+	case n >= 1<<30:
+		return fmt.Sprintf("%.1f GB", float64(n)/(1<<30))
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(n)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
 }
 
 // Start launches mihomo as a child process.

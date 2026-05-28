@@ -47,18 +47,19 @@ func InitManagers() (*cfg.Manager, *kernel.Manager, *api.Client, *subscription.M
 	c := cm.Config()
 	km := kernel.NewManager(cm.ConfigDir(), cm.MihomoDir(), c.Core.APIPort)
 
-	// Auto-install kernel
 	if !km.IsInstalled() {
-		fmt.Println("Downloading mihomo kernel...")
-		if err := km.Install(); err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("install mihomo: %w", err)
-		}
-		fmt.Println("Mihomo kernel installed")
-	}
-
-	// Try to start if not running
-	if !km.IsRunning() {
-		fmt.Println("Starting mihomo...")
+		// Don't auto-download — user's network may need proxy to work first
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  mihomo kernel not found.")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  Install it with:")
+		fmt.Fprintln(os.Stderr, "    mihomo-cli kernel install")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  Or put the mihomo binary manually at:")
+		fmt.Fprintf(os.Stderr, "    %s\n", km.BinPath())
+		fmt.Fprintln(os.Stderr, "")
+	} else if !km.IsRunning() {
+		fmt.Fprintln(os.Stderr, "Starting mihomo...")
 		if err := km.Start(); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not start mihomo: %v\n", err)
 		}
@@ -68,7 +69,6 @@ func InitManagers() (*cfg.Manager, *kernel.Manager, *api.Client, *subscription.M
 
 	sm := subscription.NewManager(cm)
 
-	// Wire into CLI globals
 	SetConfigManager(cm)
 	SetKernelManager(km)
 	if apiClient != nil {
