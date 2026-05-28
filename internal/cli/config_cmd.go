@@ -54,10 +54,11 @@ var configReloadCmd = &cobra.Command{
 	Use:   "reload",
 	Short: "Reload mihomo configuration",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if apiClient == nil {
-			return fmt.Errorf("API client not available — is mihomo running?")
+		ac, err := ensureMihomo()
+		if err != nil {
+			return err
 		}
-		if err := apiClient.ReloadConfig(); err != nil {
+		if err := ac.ReloadConfig(); err != nil {
 			return fmt.Errorf("reload config: %w", err)
 		}
 		fmt.Println("Configuration reloaded")

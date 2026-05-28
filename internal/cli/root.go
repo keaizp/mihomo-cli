@@ -14,64 +14,92 @@ import (
 	"mihomo-cli/internal/tui"
 )
 
+var (
+	cfgMgr    *cfg.Manager
+	kernelMgr *kernel.Manager
+	apiClient *api.Client
+	subMgr    *subscription.Manager
+)
+
+func SetConfigManager(mgr *cfg.Manager)        { cfgMgr = mgr }
+func SetKernelManager(mgr *kernel.Manager)      { kernelMgr = mgr }
+func SetAPIClient(client *api.Client)           { apiClient = client }
+func SetSubscriptionManager(mgr *subscription.Manager) { subMgr = mgr }
+
 var rootCmd = &cobra.Command{
 	Use:   "mihomo-cli",
 	Short: "Manage mihomo proxy from the command line",
 	Long:  "A CLI tool for managing mihomo proxy subscriptions, nodes, modes, and service lifecycle.",
-	Run: func(cmd *cobra.Command, args []string) {
-		cm, km, ac, sm, err := InitManagers()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "init: %v\n", err)
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if cmd.Name() == "help" || cmd.Name() == "completion" {
+			return nil
 		}
-		if ac == nil {
-			fmt.Println("Mihomo is not running. Start it with: mihomo-cli service start")
+		return initBaseManagers()
+	},
+	Run: func(cmd *cobra.Command, args []string) {
+		ac, err := ensureMihomo()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
-		model := tui.NewModel(ac, km, sm)
+		if ac == nil {
+			fmt.Fprintln(os.Stderr, "Mihomo is not running. Start it with: mihomo-cli service start")
+			os.Exit(1)
+		}
+		model := tui.NewModel(ac, kernelMgr, subMgr)
 		p := tea.NewProgram(model, tea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
 			os.Exit(1)
 		}
-		_ = cm
 	},
 }
 
-// InitManagers creates and wires all managers from config.
-func InitManagers() (*cfg.Manager, *kernel.Manager, *api.Client, *subscription.Manager, error) {
+// initBaseManagers initializes config, kernel, and subscription managers.
+// Lightweight — does not start mihomo.
+func initBaseManagers() error {
+	if cfgMgr != nil {
+		return nil
+	}
+
 	cm, err := cfg.NewManager()
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("init config: %w", err)
+		return fmt.Errorf("init config: %w", err)
 	}
+	cfgMgr = cm
 
 	c := cm.Config()
-	km := kernel.NewManager(cm.ConfigDir(), cm.MihomoDir(), c.Core.APIPort)
+	kernelMgr = kernel.NewManager(cm.ConfigDir(), cm.MihomoDir(), c.Core.APIPort)
 
-	if !km.IsInstalled() {
-		if err := km.ExtractEmbedded(km.BinPath()); err != nil {
-			fmt.Fprintf(os.Stderr, "error: extract kernel: %v\n", err)
-			fmt.Fprintf(os.Stderr, "  Install manually: mihomo-cli kernel install --local <path>\n")
+	subMgr = subscription.NewManager(cm)
+
+	return nil
+}
+
+// ensureMihomo extracts the embedded kernel if needed, starts mihomo if not
+// running, and returns an API client. Uses PID file to prevent duplicates.
+func ensureMihomo() (*api.Client, error) {
+	if kernelMgr == nil {
+		return nil, fmt.Errorf("kernel manager not initialized")
+	}
+
+	if !kernelMgr.IsInstalled() {
+		if err := kernelMgr.ExtractEmbedded(kernelMgr.BinPath()); err != nil {
+			return nil, fmt.Errorf("kernel not installed: %w\n  Install manually: mihomo-cli kernel install --local <path>", err)
 		}
 	}
 
-	if km.IsInstalled() && !km.IsRunning() {
-		if err := km.Start(); err != nil {
-			fmt.Fprintf(os.Stderr, "error: start mihomo: %v\n", err)
+	if !kernelMgr.IsRunning() {
+		if err := kernelMgr.Start(); err != nil {
+			return nil, fmt.Errorf("start mihomo: %w", err)
 		}
 	}
 
-	apiClient := km.APIClient()
-
-	sm := subscription.NewManager(cm)
-
-	SetConfigManager(cm)
-	SetKernelManager(km)
-	if apiClient != nil {
-		SetAPIClient(apiClient)
+	ac := kernelMgr.APIClient()
+	if ac == nil {
+		return nil, fmt.Errorf("mihomo API not reachable")
 	}
-	SetSubscriptionManager(sm)
-
-	return cm, km, apiClient, sm, nil
+	return ac, nil
 }
 
 func Execute() {

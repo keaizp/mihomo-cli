@@ -4,15 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-
-	"mihomo-cli/internal/cfg"
 )
-
-var cfgMgr *cfg.Manager
-
-func SetConfigManager(mgr *cfg.Manager) {
-	cfgMgr = mgr
-}
 
 var modeCmd = &cobra.Command{
 	Use:   "mode",

@@ -11,6 +11,14 @@ import (
 var connCmd = &cobra.Command{
 	Use:   "conn",
 	Short: "Manage active connections",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		ac, err := ensureMihomo()
+		if err != nil {
+			return err
+		}
+		apiClient = ac
+		return nil
+	},
 }
 
 var connListCmd = &cobra.Command{

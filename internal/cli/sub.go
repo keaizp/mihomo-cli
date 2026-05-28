@@ -6,15 +6,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
-
-	"mihomo-cli/internal/subscription"
 )
-
-var subMgr *subscription.Manager
-
-func SetSubscriptionManager(mgr *subscription.Manager) {
-	subMgr = mgr
-}
 
 var subCmd = &cobra.Command{
 	Use:   "sub",

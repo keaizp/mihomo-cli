@@ -8,19 +8,19 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-
-	"mihomo-cli/internal/api"
 )
-
-var apiClient *api.Client
-
-func SetAPIClient(client *api.Client) {
-	apiClient = client
-}
 
 var proxyCmd = &cobra.Command{
 	Use:   "proxy",
 	Short: "Manage proxy nodes",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		ac, err := ensureMihomo()
+		if err != nil {
+			return err
+		}
+		apiClient = ac
+		return nil
+	},
 }
 
 var proxyListCmd = &cobra.Command{
@@ -98,7 +98,7 @@ var proxyTestCmd = &cobra.Command{
 
 		for name, p := range proxies.Proxies {
 			if p.All != nil {
-				continue // Skip groups, test individual nodes
+				continue
 			}
 			if len(args) > 0 && name != args[0] {
 				continue

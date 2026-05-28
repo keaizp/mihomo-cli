@@ -4,15 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-
-	"mihomo-cli/internal/kernel"
 )
-
-var kernelMgr *kernel.Manager
-
-func SetKernelManager(mgr *kernel.Manager) {
-	kernelMgr = mgr
-}
 
 var serviceCmd = &cobra.Command{
 	Use:   "service",
@@ -29,6 +21,11 @@ var serviceStartCmd = &cobra.Command{
 		if kernelMgr.IsRunning() {
 			fmt.Println("mihomo is already running")
 			return nil
+		}
+		if !kernelMgr.IsInstalled() {
+			if err := kernelMgr.ExtractEmbedded(kernelMgr.BinPath()); err != nil {
+				return fmt.Errorf("kernel not installed: install via 'mihomo-cli kernel install'")
+			}
 		}
 		if err := kernelMgr.Start(); err != nil {
 			return fmt.Errorf("start mihomo: %w", err)
@@ -60,6 +57,11 @@ var serviceRestartCmd = &cobra.Command{
 		if kernelMgr == nil {
 			return fmt.Errorf("kernel manager not initialized")
 		}
+		if !kernelMgr.IsInstalled() {
+			if err := kernelMgr.ExtractEmbedded(kernelMgr.BinPath()); err != nil {
+				return fmt.Errorf("kernel not installed: install via 'mihomo-cli kernel install'")
+			}
+		}
 		if err := kernelMgr.Restart(); err != nil {
 			return fmt.Errorf("restart mihomo: %w", err)
 		}
@@ -90,6 +92,10 @@ var serviceLogsCmd = &cobra.Command{
 		lines, err := kernelMgr.ReadLogs(50)
 		if err != nil {
 			return fmt.Errorf("read logs: %w", err)
+		}
+		if len(lines) == 0 {
+			fmt.Println("(no logs)")
+			return nil
 		}
 		for _, line := range lines {
 			fmt.Println(line)

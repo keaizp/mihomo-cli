@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -201,20 +202,43 @@ func (m *Manager) Start() error {
 	defer m.mu.Unlock()
 
 	if m.cmd != nil {
-		return nil // already started by us
+		return nil
 	}
 
-	// Check if another mihomo is already running and responsive.
+	// 1. PID file check: if mihomo process is already alive, connect to it
+	pid := m.readPID()
+	if pid > 0 && isProcessAlive(pid) {
+		if m.probe() {
+			m.apiClient = api.NewClient(fmt.Sprintf(apiBaseURL, m.apiPort))
+			return nil
+		}
+		// Process is alive but API not ready (still starting up). Wait and retry.
+		for i := 0; i < 10; i++ {
+			time.Sleep(500 * time.Millisecond)
+			if m.probe() {
+				m.apiClient = api.NewClient(fmt.Sprintf(apiBaseURL, m.apiPort))
+				return nil
+			}
+		}
+		return fmt.Errorf("mihomo (PID %d) is not responding after 5s", pid)
+	}
+
+	// 2. Clean up stale PID file
+	if pid > 0 {
+		m.cleanPID()
+	}
+
+	// 3. Probe API — maybe mihomo was started externally
 	if m.probe() {
 		m.apiClient = api.NewClient(fmt.Sprintf(apiBaseURL, m.apiPort))
 		return nil
 	}
 
+	// 4. No mihomo running — launch a new process
 	if err := os.MkdirAll(m.workDir, 0755); err != nil {
 		return fmt.Errorf("create work dir: %w", err)
 	}
 
-	// Redirect mihomo logs to file so they don't flood the terminal.
 	logDir := filepath.Join(m.workDir, "logs")
 	os.MkdirAll(logDir, 0755)
 	logFile, err := os.Create(filepath.Join(logDir, "mihomo.log"))
@@ -240,6 +264,9 @@ func (m *Manager) Start() error {
 		return fmt.Errorf("start mihomo: %w", err)
 	}
 
+	// Write PID immediately so other invocations see it
+	m.writePID(m.cmd.Process.Pid)
+
 	time.Sleep(startupWait)
 	m.apiClient = api.NewClient(fmt.Sprintf(apiBaseURL, m.apiPort))
 
@@ -251,14 +278,20 @@ func (m *Manager) Stop() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.cmd == nil {
-		return nil
+	pid := m.readPID()
+	if pid > 0 {
+		if proc, err := os.FindProcess(pid); err == nil {
+			proc.Kill()
+		}
+		m.cleanPID()
 	}
-	if err := m.cmd.Process.Kill(); err != nil {
-		return fmt.Errorf("kill mihomo: %w", err)
+
+	if m.cmd != nil && m.cmd.Process != nil {
+		m.cmd.Process.Kill()
+		m.cmd.Wait()
+		m.cmd = nil
 	}
-	m.cmd.Wait()
-	m.cmd = nil
+
 	m.apiClient = nil
 	return nil
 }
@@ -270,25 +303,27 @@ func (m *Manager) Restart() error {
 }
 
 // IsRunning checks if mihomo is running and responsive.
-// It works even when mihomo was started by a previous invocation.
 func (m *Manager) IsRunning() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.apiClient != nil && m.apiClient.HealthCheck() == nil {
 		return true
 	}
-	return m.probe()
-}
 
-// probe checks if the mihomo API is responding (1s timeout).
-func (m *Manager) probe() bool {
-	c := &http.Client{Timeout: 1 * time.Second}
-	resp, err := c.Get(fmt.Sprintf(apiBaseURL+"/version", m.apiPort))
-	if err != nil {
-		return false
+	pid := m.readPID()
+	if pid > 0 && isProcessAlive(pid) {
+		if m.probe() {
+			m.apiClient = api.NewClient(fmt.Sprintf(apiBaseURL, m.apiPort))
+			return true
+		}
 	}
-	resp.Body.Close()
-	return resp.StatusCode == 200
+
+	if pid > 0 && !isProcessAlive(pid) {
+		m.cleanPID()
+	}
+
+	return false
 }
 
 // APIClient returns the API client, or nil if mihomo is not running.
@@ -298,7 +333,6 @@ func (m *Manager) APIClient() *api.Client {
 	if m.apiClient != nil {
 		return m.apiClient
 	}
-	// Try to connect to an externally-managed mihomo.
 	if m.probe() {
 		m.apiClient = api.NewClient(fmt.Sprintf(apiBaseURL, m.apiPort))
 		return m.apiClient
@@ -308,25 +342,73 @@ func (m *Manager) APIClient() *api.Client {
 
 // Status returns a human-readable status string.
 func (m *Manager) Status() string {
-	if m.cmd != nil && m.IsRunning() {
+	if m.IsRunning() {
 		return "running"
 	}
-	if m.cmd != nil {
+	pid := m.readPID()
+	if pid > 0 && isProcessAlive(pid) {
 		return "starting"
 	}
 	return "stopped"
 }
 
-// ReadLogs reads log file entries from the mihomo log directory.
+// ReadLogs reads the last n lines from the mihomo log file.
 func (m *Manager) ReadLogs(n int) ([]string, error) {
-	logPath := filepath.Join(m.workDir, "logs")
-	entries, err := os.ReadDir(logPath)
+	logPath := filepath.Join(m.workDir, "logs", "mihomo.log")
+	data, err := os.ReadFile(logPath)
 	if err != nil {
 		return nil, err
 	}
-	if len(entries) == 0 {
-		return nil, nil
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if n > 0 && len(lines) > n {
+		lines = lines[len(lines)-n:]
 	}
-	latest := entries[len(entries)-1]
-	return []string{latest.Name()}, nil
+	return lines, nil
+}
+
+// --- PID file helpers ---
+
+const pidFileName = "mihomo.pid"
+
+func (m *Manager) pidFilePath() string {
+	return filepath.Join(m.workDir, pidFileName)
+}
+
+func (m *Manager) readPID() int {
+	data, err := os.ReadFile(m.pidFilePath())
+	if err != nil {
+		return 0
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return 0
+	}
+	return pid
+}
+
+func (m *Manager) writePID(pid int) error {
+	return os.WriteFile(m.pidFilePath(), []byte(strconv.Itoa(pid)), 0644)
+}
+
+func (m *Manager) cleanPID() {
+	os.Remove(m.pidFilePath())
+}
+
+func isProcessAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	_, err := os.Stat(fmt.Sprintf("/proc/%d", pid))
+	return err == nil
+}
+
+// probe checks if the mihomo API is responding (2s timeout).
+func (m *Manager) probe() bool {
+	c := &http.Client{Timeout: 2 * time.Second}
+	resp, err := c.Get(fmt.Sprintf(apiBaseURL+"/version", m.apiPort))
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == 200
 }
