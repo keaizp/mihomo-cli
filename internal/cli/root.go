@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
 	"mihomo-cli/internal/api"
 	"mihomo-cli/internal/cfg"
 	"mihomo-cli/internal/kernel"
 	"mihomo-cli/internal/subscription"
+	"mihomo-cli/internal/tui"
 )
 
 var rootCmd = &cobra.Command{
@@ -17,8 +19,21 @@ var rootCmd = &cobra.Command{
 	Short: "Manage mihomo proxy from the command line",
 	Long:  "A CLI tool for managing mihomo proxy subscriptions, nodes, modes, and service lifecycle.",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("TUI mode not yet implemented")
-		os.Exit(0)
+		cm, km, ac, sm, err := InitManagers()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "init: %v\n", err)
+		}
+		if ac == nil {
+			fmt.Println("Mihomo is not running. Start it with: mihomo-cli service start")
+			os.Exit(1)
+		}
+		model := tui.NewModel(ac, km, sm)
+		p := tea.NewProgram(model, tea.WithAltScreen())
+		if _, err := p.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+			os.Exit(1)
+		}
+		_ = cm
 	},
 }
 
