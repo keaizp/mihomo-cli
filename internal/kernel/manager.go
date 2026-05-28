@@ -267,10 +267,21 @@ func (m *Manager) Start() error {
 	// Write PID immediately so other invocations see it
 	m.writePID(m.cmd.Process.Pid)
 
-	time.Sleep(startupWait)
-	m.apiClient = api.NewClient(fmt.Sprintf(apiBaseURL, m.apiPort))
+	// Wait for API to become available with retries
+	time.Sleep(1 * time.Second)
+	for i := 0; i < 15; i++ {
+		if m.probe() {
+			m.apiClient = api.NewClient(fmt.Sprintf(apiBaseURL, m.apiPort))
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 
-	return nil
+	// Process started but API never came up — it may have crashed
+	m.cmd.Process.Kill()
+	m.cmd = nil
+	m.cleanPID()
+	return fmt.Errorf("mihomo started but API not reachable after 8s — check logs at %s/logs/mihomo.log", m.workDir)
 }
 
 // Stop terminates the mihomo process.
