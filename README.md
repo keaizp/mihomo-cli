@@ -6,10 +6,24 @@ Linux 命令行代理管理工具，对标 Clash Verge 的全部功能。基于 
 
 ### 1. 编译
 
+**在 Linux 上直接编译：**
+
 ```bash
 git clone <repo-url> && cd mihomo-cli
 go build -o mihomo-cli ./cmd/mihomo-cli/
 ```
+
+**在 Windows/macOS 上交叉编译 Linux 版本：**
+
+```bash
+# Windows PowerShell
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o mihomo-cli ./cmd/mihomo-cli/
+
+# macOS / Linux bash
+GOOS=linux GOARCH=amd64 go build -o mihomo-cli ./cmd/mihomo-cli/
+```
+
+> **注意**：在 Windows 上编译默认生成 `.exe` 文件，那是 Windows 格式。必须用上面的交叉编译命令，带上 `GOOS=linux GOARCH=amd64` 才能生成 Linux 可用的二进制（无后缀）。
 
 编译完成后，二进制文件在当前目录下：
 
@@ -360,3 +374,17 @@ curl -I https://github.com/MetaCubeX/mihomo/releases
 ```
 
 如果网络受限，可以手动下载 mihomo 二进制放到 `~/.config/mihomo-cli/mihomo` 并确保有执行权限。
+
+### `MZ... not found` / `Syntax error: Unterminated quoted string`
+
+这是因为运行了 **Windows 版本的二进制**。在 Windows 上编译会生成 `.exe`（PE 格式），Linux 无法执行。解决方案：
+
+```bash
+# 在 Windows 上交叉编译（PowerShell）
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o mihomo-cli ./cmd/mihomo-cli/
+
+# 或者在 Linux 上直接重新编译
+go build -o mihomo-cli ./cmd/mihomo-cli/
+```
+
+生成的 Linux 二进制没有 `.exe` 后缀，传过去 `chmod +x` 后即可运行。
