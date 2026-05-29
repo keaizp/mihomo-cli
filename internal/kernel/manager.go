@@ -368,6 +368,9 @@ func (m *Manager) ReadLogs(n int) ([]string, error) {
 	logPath := filepath.Join(m.workDir, "logs", "mihomo.log")
 	data, err := os.ReadFile(logPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
