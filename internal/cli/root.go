@@ -63,7 +63,7 @@ func InitBase() error {
 	cfgMgr = cm
 
 	c := cm.Config()
-	kernelMgr = kernel.NewManager(cm.ConfigDir(), cm.MihomoDir(), c.Core.APIPort)
+	kernelMgr = kernel.NewManager(cm.MihomoDir(), cm.MihomoDir(), c.Core.APIPort)
 
 	subMgr = subscription.NewManager(cm)
 

@@ -154,8 +154,10 @@ func (m *Manager) UpdateSubscriptionTimestamp(name string, ts int64) error {
 // ConfigDir returns the config directory path.
 func (m *Manager) ConfigDir() string { return m.configDir }
 
-// MihomoDir returns the mihomo working directory.
-func (m *Manager) MihomoDir() string { return filepath.Join(m.configDir, "mihomo") }
+// MihomoDir returns the mihomo working directory (kernel, logs, PID, generated config).
+// Uses a fixed system path so the daemon data is consistent regardless of which user
+// runs the CLI (e.g. sudo vs normal user).
+func (m *Manager) MihomoDir() string { return "/var/lib/mihomo-cli" }
 
 // MihomoConfigPath returns the path to the generated mihomo config file.
 func (m *Manager) MihomoConfigPath() string {
