@@ -1,10 +1,8 @@
 # mihomo-cli
 
-Linux 命令行代理管理工具，对标 Clash Verge 的全部功能。基于 mihomo 内核，支持 CLI 子命令和 TUI 交互界面。
+Linux 代理管理工具，CLI + TUI 双模式，对标 Clash Verge 全部功能。
 
 ## 安装
-
-### 一键安装
 
 ```bash
 git clone <repo-url> && cd mihomo-cli
@@ -12,531 +10,175 @@ make build
 sudo make install
 ```
 
-安装完成后，`mihomo-cli` 在任何目录都可以使用。
+安装后在任何目录直接使用：
 
 ```bash
 mihomo-cli                 # 进入 TUI 界面
 mihomo-cli --help          # 查看所有命令
 ```
 
-### 一键卸载
+**可选：**
+
+```bash
+sudo make install-completions          # Shell 自动补全（bash/zsh/fish）
+sudo cp mihomo-cli.service /etc/systemd/system/  # systemd 服务（开机自启）
+sudo systemctl enable --now mihomo-cli
+```
+
+**卸载：**
 
 ```bash
 sudo make uninstall
 ```
 
-这会停止服务、删除二进制和守护进程数据。用户配置（`~/.config/mihomo-cli/`）会被保留。
-
-### Shell 自动补全
-
-```bash
-# 一键安装所有 Shell 的补全
-sudo make install-completions
-
-# 或手动安装指定 Shell
-source <(mihomo-cli completion bash)     # 临时生效
-mihomo-cli completion bash | sudo tee /etc/bash_completion.d/mihomo-cli   # 永久生效
-```
-
-支持的 Shell：`bash`、`zsh`、`fish`、`powershell`
-
-### systemd 服务（开机自启）
-
-```bash
-sudo cp mihomo-cli.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now mihomo-cli
-sudo systemctl status mihomo-cli
-```
-
-### 交叉编译
-
-```bash
-# Windows PowerShell
-$env:GOOS="linux"; $env:GOARCH="amd64"; go build -ldflags="-s -w" -o mihomo-cli ./cmd/mihomo-cli/
-
-# macOS / Linux bash
-GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o mihomo-cli ./cmd/mihomo-cli/
-```
-
-> 交叉编译前需要先下载内核文件：`make download-kernel`（或手动放到 `internal/kernel/embedded/mihomo-linux-amd64.gz`）
-
-### 依赖
-
-- Go 1.22+（仅编译时需要）
-- Linux amd64（嵌入内核仅支持此平台）
-- GNOME 桌面环境（系统代理功能需要 gsettings）
-
-## 快速开始
+## 快速上手
 
 ```bash
 # 1. 添加订阅
-mihomo-cli sub add my-sub "https://your-subscription-url"
+mihomo-cli sub add 我的订阅 "https://your-sub-url"
 
-# 2. 更新订阅（拉取节点列表）
-mihomo-cli sub update my-sub
+# 2. 更新订阅
+mihomo-cli sub update
 
-# 3. 查看节点
-mihomo-cli proxy list
+# 3. 启动代理
+mihomo-cli service start
 
-# 4. 切换节点
-mihomo-cli proxy set GLOBAL "🇭🇰 HK-01"
-
-# 5. 测试延迟
-mihomo-cli proxy test
-
-# 6. 或者直接进入 TUI 交互界面
+# 4. 进入 TUI 选节点（或用 proxy set 命令行切换）
 mihomo-cli
 ```
 
-## 命令参考
-
-### 订阅管理 `sub`
-
-```bash
-# 添加订阅
-mihomo-cli sub add <名称> <URL>
-mihomo-cli sub add my-vpn "https://example.com/subscribe?token=xxx"
-
-# 列出所有订阅
-mihomo-cli sub list
-
-# 更新指定订阅
-mihomo-cli sub update my-vpn
-
-# 更新全部订阅
-mihomo-cli sub update
-
-# 删除订阅
-mihomo-cli sub remove my-vpn
-```
-
-### 代理模式 `mode`
-
-```bash
-# 查看当前模式
-mihomo-cli mode show
-
-# 切换模式
-mihomo-cli mode set rule     # 规则模式（推荐，按规则分流）
-mihomo-cli mode set global   # 全局模式（所有流量走代理）
-mihomo-cli mode set direct   # 直连模式（所有流量不走代理）
-mihomo-cli mode set script   # 脚本模式
-```
-
-### 节点管理 `proxy`
-
-```bash
-# 列出所有代理组和节点（● 标记当前选中）
-mihomo-cli proxy list
-
-# 按分组列出
-mihomo-cli proxy list --group GLOBAL
-
-# 切换节点
-mihomo-cli proxy set <分组> <节点名>
-mihomo-cli proxy set GLOBAL "🇭🇰 HK-01"
-
-# 测试所有节点延迟
-mihomo-cli proxy test
-
-# 测试指定节点延迟
-mihomo-cli proxy test "🇭🇰 HK-01"
-
-# 查看节点详情
-mihomo-cli proxy info "🇭🇰 HK-01"
-```
-
-### 内核管理 `kernel`
-
-正常情况下内核已嵌入二进制，开盒即用。以下命令用于手动替换内核：
-
-```bash
-# 查看内核安装路径
-mihomo-cli kernel path
-
-# 使用本地内核替换
-mihomo-cli kernel install --local ~/Downloads/mihomo-linux-amd64-v1.18.10.gz
-
-# 从镜像下载替换
-mihomo-cli kernel install --url https://mirror.example.com/mihomo.gz
-```
-
-### 服务控制 `service`
-
-```bash
-# 启动 mihomo 内核
-mihomo-cli service start
-
-# 停止内核
-mihomo-cli service stop
-
-# 重启内核
-mihomo-cli service restart
-
-# 查看运行状态
-mihomo-cli service status
-# 输出: mihomo: running / stopped / starting
-
-# 查看日志
-mihomo-cli service logs
-```
-
-### 连接管理 `conn`
-
-```bash
-# 查看当前所有连接
-mihomo-cli conn list
-# 输出: ID | HOST | NETWORK | RULE | UPLOAD | DOWNLOAD
-
-# 关闭指定连接
-mihomo-cli conn close <连接ID>
-```
-
-### 配置管理 `config`
-
-```bash
-# 查看当前配置
-mihomo-cli config show
-# 输出: Mode, HTTP/SOCKS/API 端口, 订阅数量
-
-# 用编辑器打开配置文件
-mihomo-cli config edit
-# 使用 $EDITOR 环境变量指定的编辑器，默认 vim
-
-# 重载配置（无需重启内核）
-mihomo-cli config reload
-```
-
-## 代理端口与使用方式
-
-mihomo 启动后监听以下端口（可在 `~/.config/mihomo-cli/config.yaml` 中修改）：
-
-| 端口 | 类型 | 用途 |
-|------|------|------|
-| `7890` | Mixed（HTTP + SOCKS5） | 代理流量入口 |
-| `7891` | SOCKS5 | 独立 SOCKS5 代理 |
-| `9090` | REST API | mihomo-cli 内部通信 |
-
-### 让终端程序走代理
-
-mihomo 是代理服务器，不会自动接管系统流量。需要让其他程序知道代理地址：
-
-**临时设置（当前终端会话有效）：**
-
-```bash
-export http_proxy=http://127.0.0.1:7890
-export https_proxy=http://127.0.0.1:7890
-```
-
-**永久设置（加入 `~/.bashrc` 或 `~/.profile`）：**
-
-```bash
-echo 'export http_proxy=http://127.0.0.1:7890' >> ~/.bashrc
-echo 'export https_proxy=http://127.0.0.1:7890' >> ~/.bashrc
-source ~/.bashrc
-```
-
-**取消代理：**
-
-```bash
-unset http_proxy https_proxy
-```
-
-或直接切直连模式（代理服务器继续运行但不转发到远程节点）：
-
-```bash
-mihomo-cli mode set direct
-```
-
-> **提示**：可以把开关绑成别名方便日常使用：
-> ```bash
-> alias proxy-on='export http_proxy=http://127.0.0.1:7890 https_proxy=http://127.0.0.1:7890'
-> alias proxy-off='unset http_proxy https_proxy'
-> ```
-
-### 让浏览器走代理
-
-在浏览器中安装代理切换插件（如 SwitchyOmega），添加代理配置：
-- 协议：HTTP，地址：`127.0.0.1`，端口：`7890`
-
-或在系统网络设置中手动配置 HTTP/HTTPS 代理为 `127.0.0.1:7890`。
-
-### 让 apt 走代理
-
-```bash
-sudo apt -o Acquire::http::Proxy="http://127.0.0.1:7890" update
-```
-
-### 让 git 走代理
-
-```bash
-git config --global http.proxy http://127.0.0.1:7890
-git config --global --unset http.proxy   # 取消
-```
-
-## 验证代理是否生效
-
-### 方法 1：对比 IP（最直观）
-
-```bash
-# 直连 IP
-curl -s https://ip.sb && echo "  ← 直连 IP"
-
-# 通过代理（7890 是 mixed 端口）
-curl -x http://127.0.0.1:7890 -s https://ip.sb && echo "  ← 代理 IP"
-
-# 通过 SOCKS5（7891 是 socks 端口）
-curl --socks5 127.0.0.1:7891 -s https://ip.sb && echo "  ← SOCKS5 代理 IP"
-```
-
-如果代理 IP 和直连 IP 不一样，代理生效。
-
-### 方法 2：延迟对比
-
-```bash
-# 直连 Google
-time curl -s -o /dev/null https://www.google.com
-
-# 通过代理
-time curl -s -o /dev/null -x http://127.0.0.1:7890 https://www.google.com
-
-# 通过 SOCKS5
-time curl -s -o /dev/null --socks5 127.0.0.1:7891 https://www.google.com
-```
-
-### 方法 3：节点延迟测试
-
-```bash
-mihomo-cli proxy test           # 测试所有节点
-mihomo-cli proxy test "HK-01"   # 测试指定节点
-```
-
-## 监控与调试
-
-### 查看实时连接
-
-```bash
-mihomo-cli conn list
-```
-
-可以看到每条连接的目标域名、协议、匹配规则、上下行流量。开着浏览器访问网站时再跑一下，就能看到新增的连接记录。
-
-### 查看运行日志
-
-```bash
-mihomo-cli service logs           # 最近的日志
-sudo tail -f /var/lib/mihomo-cli/logs/mihomo.log  # 实时追踪
-```
-
-### 检查服务状态
-
-```bash
-mihomo-cli service status         # running / stopped
-ps -ef | grep mihomo              # 确认进程存在
-```
+## 命令速查
+
+### 服务控制
+
+| 命令 | 说明 |
+|------|------|
+| `mihomo-cli service start` | 启动代理 |
+| `mihomo-cli service stop` | 停止代理 |
+| `mihomo-cli service restart` | 重启代理 |
+| `mihomo-cli service status` | 查看状态 |
+| `mihomo-cli service logs` | 查看日志 |
+
+### 节点与模式
+
+| 命令 | 说明 |
+|------|------|
+| `mihomo-cli proxy list` | 查看所有节点 |
+| `mihomo-cli proxy set <组> <节点>` | 切换节点 |
+| `mihomo-cli proxy test` | 测试延迟 |
+| `mihomo-cli mode set rule` | 规则模式（推荐） |
+| `mihomo-cli mode set global` | 全局模式 |
+| `mihomo-cli mode set direct` | 直连模式 |
+
+### 订阅管理
+
+| 命令 | 说明 |
+|------|------|
+| `mihomo-cli sub add <名称> <URL>` | 添加订阅 |
+| `mihomo-cli sub list` | 列出订阅 |
+| `mihomo-cli sub update` | 更新全部订阅 |
+| `mihomo-cli sub remove <名称>` | 删除订阅 |
+
+### 连接与配置
+
+| 命令 | 说明 |
+|------|------|
+| `mihomo-cli conn list` | 查看活跃连接 |
+| `mihomo-cli conn close <ID>` | 关闭连接 |
+| `mihomo-cli config show` | 查看配置 |
+| `mihomo-cli config edit` | 编辑配置 |
+| `mihomo-cli config reload` | 重载配置 |
 
 ## TUI 交互界面
 
-直接运行 `mihomo-cli`（无参数）进入全屏 TUI：
+直接运行 `mihomo-cli`（无参数）进入全屏交互界面。
 
-```
-┌── Proxies ────────────────────┐  ┌── Details ───────────┐
-│                               │  │ Name: HK-01           │
-│  [GLOBAL]                     │  │ Type: vmess           │
-│   ● 🇭🇰 HK-01    32ms         │  │ Delay: 32ms           │
-│     🇯🇵 JP-02   120ms         │  │                       │
-│     🇸🇬 SG-03   250ms         │  └───────────────────────┘
-│                               │
-│  [Streaming]                  │  ↑↓ navigate  tab group
-│   ● 🇭🇰 Netflix  45ms         │  enter switch
-│     🇺🇸 Disney   180ms         │  t test  r reload
-│                               │  u update  q quit
-│  [Direct]                     │
-│   ● DIRECT                    │
-│                               │
-├───────────────────────────────┤
-│  mihomo: running     mode: N/A│
-└───────────────────────────────┘
-```
+**5 个视图，数字键 1-5 切换：**
 
-### 键盘快捷键
+| 按键 | 视图 | 功能 |
+|------|------|------|
+| `1` | 代理 | 浏览节点、切换代理、测速、搜索 |
+| `2` | 连接 | 查看活跃连接、关闭连接 |
+| `3` | 日志 | 实时日志、按级别过滤 |
+| `4` | 规则 | 路由规则列表 |
+| `5` | 订阅 | 管理订阅 |
+
+**常用快捷键：**
 
 | 按键 | 功能 |
-|---:|---|
-| `↑` `↓` / `j` `k` | 上下移动光标 |
-| `Tab` | 切换到下一个代理组 |
-| `Enter` | 切换到选中的节点 |
-| `t` | 测试当前节点延迟 |
-| `r` | 重载配置文件 |
-| `u` | 更新所有订阅 |
-| `q` / `Ctrl+C` | 退出 |
+|------|------|
+| `↑↓` / `j` `k` | 导航 |
+| `Enter` | 切换代理 |
+| `Tab` | 切换代理组 |
+| `t` | 测速当前节点 |
+| `T` | 全组测速 |
+| `/` | 搜索节点 |
+| `空格` | 折叠代理组 |
+| `m` | 切换模式 |
+| `r` | 重载配置 |
+| `u` | 更新订阅 |
+| `q` | 退出 |
+
+## 使用代理
+
+mihomo 启动后监听 **混合端口 7890**（HTTP + SOCKS5）。
+
+**终端：**
+
+```bash
+export http_proxy=http://127.0.0.1:7890 https_proxy=http://127.0.0.1:7890
+unset http_proxy https_proxy    # 取消
+```
+
+可加入 `~/.bashrc` 永久生效，或绑定别名方便开关。
+
+**浏览器：** 安装 SwitchyOmega 插件，添加 HTTP 代理 `127.0.0.1:7890`。
+
+**其他程序：** 在各自的网络设置中配置 HTTP 代理 `127.0.0.1:7890`。
+
+## 验证代理
+
+```bash
+# 对比代理前后的 IP
+curl -s https://ip.sb                    # 直连 IP
+curl -x http://127.0.0.1:7890 -s https://ip.sb   # 代理 IP
+
+# 测试节点延迟
+mihomo-cli proxy test
+```
 
 ## 配置文件
 
-配置文件位于 `$XDG_CONFIG_HOME/mihomo-cli/config.yaml`（默认 `~/.config/mihomo-cli/config.yaml`）：
+`~/.config/mihomo-cli/config.yaml`：
 
 ```yaml
 core:
-  http_port: 7890       # HTTP 代理端口
-  socks_port: 7891      # SOCKS5 代理端口
-  mixed_port: 7892      # 混合端口（HTTP+SOCKS）
-  api_port: 9090        # REST API 端口
-  allow_lan: false      # 是否允许局域网连接
-  log_level: info       # 日志级别：debug/info/warning/error
+  http_port: 7890
+  socks_port: 7891
+  api_port: 9090
+  log_level: info
 
-mode: rule              # 默认模式：rule/global/direct/script
+mode: rule
 
 subscriptions:
-  - name: my-sub
+  - name: 我的订阅
     url: https://example.com/subscribe
-    interval: 86400    # 自动更新间隔（秒），0 表示手动更新
-    last_updated: 0
-
-user_proxies: []        # 自定义节点（YAML 格式）
-user_rules: []           # 自定义规则
+    interval: 86400
 ```
 
 ### 目录结构
 
 ```
-~/.config/mihomo-cli/          # 用户配置
-├── config.yaml                # 应用配置（订阅、模式、端口）
-└── profiles/                  # 订阅缓存
-    └── my-sub.yaml            # 每个订阅的节点数据
-
-/var/lib/mihomo-cli/           # 守护进程数据（sudo 和普通用户共用）
-├── bin/mihomo                 # mihomo 内核二进制
-├── config.yaml                # 自动生成的 mihomo 配置
-├── mihomo.pid                 # 进程 PID
-└── logs/
-    └── mihomo.log             # 运行日志
+~/.config/mihomo-cli/          # 用户配置（订阅、模式）
+/var/lib/mihomo-cli/           # 守护进程数据（内核、日志、PID）
 ```
-
-## 环境变量
-
-| 变量 | 说明 | 默认值 |
-|---|---|---|
-| `XDG_CONFIG_HOME` | 配置目录 | `~/.config` |
-| `EDITOR` | config edit 使用的编辑器 | `vim` |
-
-## 系统代理
-
-**Linux 服务器 / CLI 环境**：使用环境变量，见上文「代理端口与使用方式」一节。
-
-**GNOME 桌面环境**：可通过 `internal/sysproxy` 模块调用 `gsettings` 设置系统代理。
-
-## 常见操作流程
-
-### 初次使用
-
-```bash
-mihomo-cli                              # 首次运行自动部署内核并进入 TUI
-mihomo-cli sub add main "https://your-sub-url"
-mihomo-cli sub update main
-mihomo-cli proxy test
-mihomo-cli proxy set GLOBAL <延迟最低的节点>
-```
-
-### 日常使用
-
-```bash
-# 启动代理
-mihomo-cli service start
-
-# 进入 TUI 浏览和切换节点
-mihomo-cli
-
-# 更新订阅获取最新节点
-mihomo-cli sub update
-
-# 停止代理
-mihomo-cli service stop
-```
-
-### 脚本化 / 自动化
-
-```bash
-# 开机自启（添加到 systemd 或 ~/.profile）
-mihomo-cli service start
-
-# 定时更新订阅（添加到 crontab）
-# 每天 6:17 更新全部订阅
-17 6 * * * /usr/local/bin/mihomo-cli sub update
-
-# 快捷切换模式（绑定别名）
-alias proxy-on='mihomo-cli mode set rule'
-alias proxy-off='mihomo-cli mode set direct'
-alias proxy-global='mihomo-cli mode set global'
-```
-
-## 注意事项
-
-- mihomo 内核已嵌入二进制，首次运行自动解压到 `/var/lib/mihomo-cli/bin/mihomo`，无需手动安装
-- 非 Linux/amd64 平台不支持嵌入内核，需手动安装：`mihomo-cli kernel install --local <path>`
-- 系统代理设置仅支持 GNOME 桌面环境（通过 gsettings）
-- mihomo 内核以子进程方式运行，退出 mihomo-cli 后内核继续运行。如需停止请使用 `mihomo-cli service stop`
 
 ## 常见问题
 
-### `command not found`
+**`command not found`** — 没有安装到 PATH。运行 `sudo make install` 或手动 `sudo cp mihomo-cli /usr/local/bin/`。
 
-二进制不在 PATH 环境变量中。解决方法：
+**日志文件不存在** — 检查 mihomo 是否启动：`mihomo-cli service status`。如果没启动，先 `mihomo-cli service start`。
 
-```bash
-# 方案 A：安装到 PATH 目录（推荐）
-sudo cp mihomo-cli /usr/local/bin/
-mihomo-cli --help
+**切了节点但 IP 没变** — 确认应用正在使用代理端口 7890，或切换到全局模式：`mihomo-cli mode set global`。
 
-# 方案 B：在当前目录带路径运行
-./mihomo-cli --help
-```
-
-### `Permission denied`
-
-Linux 文件系统不会自动给新文件执行权限。解决方法：
-
-```bash
-chmod +x ./mihomo-cli
-./mihomo-cli --help
-```
-
-### 编译后 `go build` 生成的二进制也无法执行
-
-同上，某些场景下 `go build` 可能不保留执行位：
-
-```bash
-go build -o mihomo-cli ./cmd/mihomo-cli/
-chmod +x ./mihomo-cli    # 确保有执行权限
-```
-
-### 内核相关问题
-
-**正常运行不需要关心内核** — 它已嵌入在二进制中，首次运行自动部署。
-
-如果需要手动替换内核（更换版本等）：
-
-```bash
-# 查看当前内核路径
-mihomo-cli kernel path
-
-# 使用本地文件替换
-mihomo-cli kernel install --local ./mihomo
-
-# 或从镜像下载
-mihomo-cli kernel install --url https://mirror.example.com/mihomo-linux-amd64.gz
-```
-
-### `MZ... not found` / `Syntax error: Unterminated quoted string`
-
-这是因为运行了 **Windows 版本的二进制**。在 Windows 上编译会生成 `.exe`（PE 格式），Linux 无法执行。解决方案：
-
-```bash
-# 在 Windows 上交叉编译（PowerShell）
-$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o mihomo-cli ./cmd/mihomo-cli/
-
-# 或者在 Linux 上直接重新编译
-go build -o mihomo-cli ./cmd/mihomo-cli/
-```
-
-生成的 Linux 二进制没有 `.exe` 后缀，传过去 `chmod +x` 后即可运行。
+**非 Linux/amd64 平台** — 内核仅嵌入在 Linux amd64 版本中。其他平台需手动安装内核：`mihomo-cli kernel install --local <路径>`。
