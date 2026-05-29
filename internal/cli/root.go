@@ -40,7 +40,7 @@ var rootCmd = &cobra.Command{
 			fmt.Fprintln(os.Stderr, "Mihomo is not running. Start it with: mihomo-cli service start")
 			os.Exit(1)
 		}
-		model := tui.NewModel(ac, kernelMgr, subMgr)
+		model := tui.NewModel(ac, kernelMgr, subMgr, cfgMgr)
 		p := tea.NewProgram(model, tea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
