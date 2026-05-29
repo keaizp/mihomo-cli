@@ -9,24 +9,37 @@ import (
 
 // Color palette
 const (
-	colorPrimary = "#7c3aed"
-	colorSuccess = "#22c55e"
-	colorWarning = "#eab308"
-	colorDanger  = "#ef4444"
-	colorMuted   = "#71717a"
-	colorBg      = "#18181b"
-	colorBgLight = "#27272a"
-	colorBorder  = "#3f3f46"
-	colorText    = "#e4e4e7"
-	colorTextDim = "#a1a1aa"
-	colorCyan    = "#06b6d4"
+	colorPrimary  = "#7c3aed"
+	colorPrimary2 = "#a78bfa"
+	colorSuccess  = "#22c55e"
+	colorWarning  = "#eab308"
+	colorDanger   = "#ef4444"
+	colorMuted    = "#71717a"
+	colorBg       = "#18181b"
+	colorBgLight  = "#27272a"
+	colorBorder   = "#3f3f46"
+	colorText     = "#e4e4e7"
+	colorTextDim  = "#a1a1aa"
+	colorCyan     = "#06b6d4"
 )
 
-// Text styles
+// ─── App Shell ────────────────────────────────────────────────
+
 var (
-	HeaderStyle = lipgloss.NewStyle().
+	AppStyle = lipgloss.NewStyle().
+			Margin(1, 1)
+
+	// Thin line used as horizontal divider
+	DividerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color(colorBorder))
+)
+
+// ─── Text Styles ──────────────────────────────────────────────
+
+var (
+	BoldStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color(colorPrimary))
+			Foreground(lipgloss.Color(colorText))
 
 	NormalStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(colorText))
@@ -34,21 +47,26 @@ var (
 	MutedStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(colorTextDim))
 
+	AccentStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color(colorPrimary))
+
 	SelectedStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#ffffff")).
 			Background(lipgloss.Color(colorPrimary))
 
 	GroupHeaderStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#a78bfa"))
+			Bold(true).
+			Foreground(lipgloss.Color(colorPrimary2))
 
 	TypeBadgeStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(colorCyan)).
 			Background(lipgloss.Color(colorBgLight)).
-			Padding(0, 1)
+			Padding(1, 1)
 )
 
-// Status indicators
+// ─── Status Indicators ────────────────────────────────────────
+
 var (
 	StatusRunningStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color(colorSuccess)).
@@ -63,25 +81,30 @@ var (
 				Bold(true)
 )
 
-// Tab bar
+// ─── Tab Bar ──────────────────────────────────────────────────
+
 var (
 	TabActiveStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#ffffff")).
-			Background(lipgloss.Color(colorPrimary)).
 			Padding(0, 2)
 
 	TabInactiveStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(colorMuted)).
-				Padding(0, 2)
+			Foreground(lipgloss.Color(colorMuted)).
+			Padding(0, 2)
+
+	TabSeparator = lipgloss.NewStyle().
+			Foreground(lipgloss.Color(colorBorder))
 )
 
-// Panel
+// ─── Panel ────────────────────────────────────────────────────
+
 var (
 	PanelStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color(colorBorder)).
-			Padding(0, 1)
+			Padding(1, 2).
+			Margin(0, 0, 1, 0)
 
 	PanelTitleStyle = lipgloss.NewStyle().
 			Bold(true).
@@ -89,11 +112,11 @@ var (
 			Padding(0, 1)
 )
 
-// Footer / help bar
+// ─── Footer ───────────────────────────────────────────────────
+
 var (
 	FooterStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(colorTextDim)).
-			Background(lipgloss.Color(colorBg)).
 			Padding(0, 1)
 
 	HelpKeyStyle = lipgloss.NewStyle().
@@ -106,16 +129,31 @@ var (
 	SearchStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(colorText)).
 			Background(lipgloss.Color(colorBgLight)).
-			Padding(0, 1)
+			Padding(1, 1)
 )
 
-// Log level styles
+// ─── Log Level Colors ─────────────────────────────────────────
+
 var (
 	LogInfoStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(colorCyan))
 	LogWarnStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(colorWarning))
 	LogErrorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorDanger))
 	LogDebugStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorMuted))
 )
+
+// ─── List Styles ──────────────────────────────────────────────
+
+var (
+	ListHeaderStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color(colorTextDim)).
+			Bold(true)
+
+	ScrollHintStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color(colorMuted)).
+			Align(lipgloss.Center)
+)
+
+// ─── Helpers ──────────────────────────────────────────────────
 
 // LatencyColor returns a lipgloss color for a given delay in ms.
 func LatencyColor(delay int) lipgloss.Color {
@@ -134,7 +172,7 @@ func LatencyColor(delay int) lipgloss.Color {
 // LatencyBar returns a visual bar representing relative latency.
 func LatencyBar(delay int, maxDelay int, width int) string {
 	if delay <= 0 || maxDelay <= 0 {
-		return strings.Repeat(" ", width)
+		return MutedStyle.Render(strings.Repeat("·", width))
 	}
 	ratio := float64(delay) / float64(maxDelay)
 	if ratio > 1 {
@@ -144,7 +182,7 @@ func LatencyBar(delay int, maxDelay int, width int) string {
 	if filled < 1 && delay > 0 {
 		filled = 1
 	}
-	bar := strings.Repeat("█", filled) + strings.Repeat(" ", width-filled)
+	bar := strings.Repeat("█", filled) + strings.Repeat("·", width-filled)
 	return lipgloss.NewStyle().Foreground(LatencyColor(delay)).Render(bar)
 }
 
@@ -179,4 +217,13 @@ func FormatDuration(seconds int64) string {
 		return fmt.Sprintf("%dh", seconds/3600)
 	}
 	return fmt.Sprintf("%dd", seconds/86400)
+}
+
+// Truncate clips a string to maxLen with ellipsis.
+func Truncate(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen-1]) + "…"
 }

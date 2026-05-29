@@ -15,7 +15,6 @@ func (m Model) View() string {
 
 	header := m.renderHeader()
 	tabBar := m.renderTabBar()
-	footer := m.renderFooter()
 
 	var body string
 	switch m.tabIdx {
@@ -31,19 +30,24 @@ func (m Model) View() string {
 		body = m.renderSubsTab()
 	}
 
-	mainHeight := m.height - lipgloss.Height(header) - lipgloss.Height(tabBar) - lipgloss.Height(footer)
+	footer := m.renderFooter()
+
+	mainHeight := m.height - lipgloss.Height(header) - lipgloss.Height(tabBar) - lipgloss.Height(footer) - 2
 	if mainHeight < 5 {
 		mainHeight = 5
 	}
 	body = lipgloss.NewStyle().Height(mainHeight).Render(body)
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, tabBar, body, footer)
+	content := lipgloss.JoinVertical(lipgloss.Left, header, tabBar, body, footer)
+	return AppStyle.Render(content)
 }
 
-// ─── Header ─────────────────────────────────────────────────
+// ─── Header ───────────────────────────────────────────────────
 
 func (m Model) renderHeader() string {
-	statusText := StatusStoppedStyle.Render("已停止")
+	appName := BoldStyle.Foreground(lipgloss.Color(colorPrimary)).Render("⚡ mihomo-cli")
+
+	statusText := StatusStoppedStyle.Render("● 已停止")
 	if m.kernelMgr != nil {
 		switch m.kernelMgr.Status() {
 		case "running":
@@ -53,122 +57,170 @@ func (m Model) renderHeader() string {
 		}
 	}
 
-	mode := "未知"
+	modeText := "规则"
 	if m.cfgMgr != nil {
 		switch m.cfgMgr.Config().Mode {
-		case "rule":
-			mode = "规则模式"
 		case "global":
-			mode = "全局模式"
+			modeText = "全局"
 		case "direct":
-			mode = "直连模式"
+			modeText = "直连"
 		case "script":
-			mode = "脚本模式"
+			modeText = "脚本"
 		}
 	}
+	modeBadge := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(colorPrimary2)).
+		Background(lipgloss.Color(colorBgLight)).
+		Padding(0, 1).
+		Render(modeText)
 
 	traffic := ""
 	if m.trafficUp > 0 || m.trafficDown > 0 {
-		traffic = fmt.Sprintf("↑ %s  ↓ %s", FormatRate(m.trafficUp), FormatRate(m.trafficDown))
+		up := lipgloss.NewStyle().Foreground(lipgloss.Color(colorSuccess)).Render(fmt.Sprintf("↑%s", FormatRate(m.trafficUp)))
+		down := lipgloss.NewStyle().Foreground(lipgloss.Color(colorCyan)).Render(fmt.Sprintf("↓%s", FormatRate(m.trafficDown)))
+		traffic = up + " " + down
 	}
 
-	notif := ""
+	right := fmt.Sprintf("%s  %s  %s", statusText, modeBadge, traffic)
+
 	if m.notification != "" {
-		notif = MutedStyle.Render(" | " + m.notification)
+		right += "  " + MutedStyle.Render(m.notification)
 	}
 
-	left := HeaderStyle.Render("mihomo-cli")
-	middle := fmt.Sprintf("%s  %s  %s%s",
-		statusText, MutedStyle.Render(mode), MutedStyle.Render(traffic), notif)
-
-	leftW := lipgloss.Width(left)
-	middleW := lipgloss.Width(middle)
-	spacing := m.width - leftW - middleW - 2
-	if spacing < 0 {
-		spacing = 1
+	rightW := lipgloss.Width(right)
+	leftW := lipgloss.Width(appName)
+	space := m.width - leftW - rightW - 4
+	if space < 1 {
+		space = 1
 	}
 
-	return left + strings.Repeat(" ", spacing) + middle
+	return appName + strings.Repeat(" ", space) + right
 }
 
-// ─── Tab Bar ────────────────────────────────────────────────
+// ─── Tab Bar ──────────────────────────────────────────────────
 
 func (m Model) renderTabBar() string {
 	tabs := []string{"代理", "连接", "日志", "规则", "订阅"}
+	tabCount := len(tabs)
+	usableWidth := m.width - 4
+	tabWidth := usableWidth / tabCount
+
 	var rendered []string
 	for i, t := range tabs {
-		label := fmt.Sprintf(" %d.%s ", i+1, t)
+		label := fmt.Sprintf("%d %s", i+1, t)
+		var tab string
 		if i == m.tabIdx {
-			rendered = append(rendered, TabActiveStyle.Render(label))
+			tab = TabActiveStyle.Width(tabWidth).Align(lipgloss.Center).Render(label)
 		} else {
-			rendered = append(rendered, TabInactiveStyle.Render(label))
+			tab = TabInactiveStyle.Width(tabWidth).Align(lipgloss.Center).Render(label)
 		}
+		if i < tabCount-1 {
+			tab += TabSeparator.Render("│")
+		}
+		rendered = append(rendered, tab)
 	}
-	separator := MutedStyle.Render("│")
-	return lipgloss.JoinHorizontal(lipgloss.Center, rendered...) + " " + separator
+
+	tabRow := lipgloss.JoinHorizontal(lipgloss.Top, rendered...)
+	divider := DividerStyle.Render(strings.Repeat("─", usableWidth))
+
+	return lipgloss.JoinVertical(lipgloss.Left, tabRow, divider)
 }
 
-// ─── Footer / Help Bar ──────────────────────────────────────
+// ─── Footer ───────────────────────────────────────────────────
 
 func (m Model) renderFooter() string {
-	var keys []string
 	if m.searchMode {
-		keys = append(keys, HelpKeyStyle.Render("输入")+HelpDescStyle.Render(" 搜索节点"))
-		keys = append(keys, HelpKeyStyle.Render("Esc")+HelpDescStyle.Render(" 取消"))
-	} else {
-		switch m.tabIdx {
-		case 0: // Proxies
-			keys = append(keys, HelpKeyStyle.Render("↑↓/jk")+HelpDescStyle.Render(" 导航"))
-			keys = append(keys, HelpKeyStyle.Render("Enter")+HelpDescStyle.Render(" 切换"))
-			keys = append(keys, HelpKeyStyle.Render("Tab")+HelpDescStyle.Render(" 换组"))
-			keys = append(keys, HelpKeyStyle.Render("t")+HelpDescStyle.Render(" 测速"))
-			keys = append(keys, HelpKeyStyle.Render("T")+HelpDescStyle.Render(" 全组测速"))
-			keys = append(keys, HelpKeyStyle.Render("/")+HelpDescStyle.Render(" 搜索"))
-			keys = append(keys, HelpKeyStyle.Render("空格")+HelpDescStyle.Render(" 折叠"))
-		case 1: // Connections
-			keys = append(keys, HelpKeyStyle.Render("↑↓/jk")+HelpDescStyle.Render(" 导航"))
-			keys = append(keys, HelpKeyStyle.Render("d")+HelpDescStyle.Render(" 关闭连接"))
-			keys = append(keys, HelpKeyStyle.Render("X")+HelpDescStyle.Render(" 关闭全部"))
-		case 2: // Logs
-			keys = append(keys, HelpKeyStyle.Render("↑↓/jk")+HelpDescStyle.Render(" 滚动"))
-			keys = append(keys, HelpKeyStyle.Render("l")+HelpDescStyle.Render(" 切换级别"))
-			keys = append(keys, HelpKeyStyle.Render("s")+HelpDescStyle.Render(" 自动滚动"))
-		case 3: // Rules
-			keys = append(keys, HelpKeyStyle.Render("↑↓/jk")+HelpDescStyle.Render(" 滚动"))
-		case 4: // Subs
-			keys = append(keys, HelpKeyStyle.Render("↑↓/jk")+HelpDescStyle.Render(" 导航"))
-			keys = append(keys, HelpKeyStyle.Render("a")+HelpDescStyle.Render(" 添加"))
-			keys = append(keys, HelpKeyStyle.Render("d")+HelpDescStyle.Render(" 删除"))
-			keys = append(keys, HelpKeyStyle.Render("u")+HelpDescStyle.Render(" 更新"))
-		}
-		keys = append(keys, HelpKeyStyle.Render("1-5")+HelpDescStyle.Render(" 视图"))
-		keys = append(keys, HelpKeyStyle.Render("m")+HelpDescStyle.Render(" 模式"))
-		keys = append(keys, HelpKeyStyle.Render("r")+HelpDescStyle.Render(" 重载"))
-		keys = append(keys, HelpKeyStyle.Render("q")+HelpDescStyle.Render(" 退出"))
+		return FooterStyle.Width(m.width - 2).Render(
+			HelpKeyStyle.Render("输入") + " 搜索节点  " +
+				HelpKeyStyle.Render("Esc") + " 取消  " +
+				HelpKeyStyle.Render("Enter") + " 确定")
 	}
-	bar := strings.Join(keys, "  ")
-	return FooterStyle.Width(m.width).Render(bar)
+
+	var keys []string
+	switch m.tabIdx {
+	case 0: // 代理
+		keys = append(keys, "↑↓ 导航", "Enter 切换", "Tab 换组", "t 测速", "T 全组测速", "/ 搜索", "空格 折叠")
+	case 1: // 连接
+		keys = append(keys, "↑↓ 导航", "d 关闭连接", "X 关闭全部")
+	case 2: // 日志
+		keys = append(keys, "↑↓ 滚动", "l 切换级别", "s 自动滚动")
+	case 3: // 规则
+		keys = append(keys, "↑↓ 滚动")
+	case 4: // 订阅
+		keys = append(keys, "↑↓ 导航", "a 添加", "d 删除", "u 更新")
+	}
+	keys = append(keys, "1-5 视图", "m 模式", "r 重载", "q 退出")
+
+	var parts []string
+	for _, k := range keys {
+		parts = append(parts, HelpKeyStyle.Render(k))
+	}
+	keyBar := strings.Join(parts, "  ")
+
+	// Separator line above footer
+	divider := DividerStyle.Render(strings.Repeat("─", m.width-4))
+
+	return lipgloss.JoinVertical(lipgloss.Left, divider, FooterStyle.Width(m.width-2).Render(keyBar))
 }
 
-// ─── Tab 1: Proxies ─────────────────────────────────────────
+// ─── Proxy List Item ──────────────────────────────────────────
+
+func (m Model) renderProxyItem(node string, isNow bool, isSelected bool, maxDelay int, nodeType string) string {
+	marker := "○"
+	if isNow {
+		marker = lipgloss.NewStyle().Foreground(lipgloss.Color(colorSuccess)).Bold(true).Render("●")
+	} else {
+		marker = MutedStyle.Render("○")
+	}
+
+	// Latency
+	latStr := "  ···"
+	if d, ok := m.delayResults[node]; ok && d > 0 {
+		latStr = lipgloss.NewStyle().Foreground(LatencyColor(d)).Bold(true).Render(fmt.Sprintf("%4dms", d))
+	}
+
+	// Bar
+	bar := LatencyBar(m.delayResults[node], maxDelay, 6)
+
+	// Type badge
+	badge := ""
+	if nodeType != "" {
+		badge = " " + lipgloss.NewStyle().
+			Foreground(lipgloss.Color(colorTextDim)).
+			Background(lipgloss.Color(colorBgLight)).
+			Padding(0, 1).
+			Render(nodeType)
+	}
+
+	// Node name (truncate if too long)
+	name := Truncate(node, 24)
+
+	line := fmt.Sprintf("  %s  %-24s %s  %s%s", marker, name, latStr, bar, badge)
+
+	if isSelected {
+		return SelectedStyle.Padding(0, 1).Render(line)
+	}
+	return NormalStyle.Padding(0, 1).Render(line)
+}
+
+// ─── Tab 1: Proxies ───────────────────────────────────────────
 
 func (m Model) renderProxiesTab() string {
 	panelW := m.width - 4
 	var b strings.Builder
 
 	if m.searchMode {
-		b.WriteString(SearchStyle.Width(panelW).Render(fmt.Sprintf(" 搜索: %s▎", m.searchQuery)))
+		b.WriteString(SearchStyle.Width(panelW - 6).Render(fmt.Sprintf(" 🔍 %s▎", m.searchQuery)))
 		b.WriteString("\n\n")
 	}
 
 	if m.proxiesErr != nil {
-		b.WriteString(MutedStyle.Render(fmt.Sprintf(" 错误: %v", m.proxiesErr)))
-		return PanelStyle.Width(panelW).Render(b.String())
+		return PanelStyle.Width(panelW - 2).Render(
+			lipgloss.NewStyle().Foreground(lipgloss.Color(colorDanger)).Render(fmt.Sprintf("✗ 错误: %v", m.proxiesErr)))
 	}
 
 	if len(m.groups) == 0 {
-		b.WriteString(MutedStyle.Render(" 暂无代理组"))
-		return PanelStyle.Width(panelW).Render(b.String())
+		return PanelStyle.Width(panelW - 2).Render(MutedStyle.Render("暂无代理组"))
 	}
 
 	for gi, groupName := range m.groups {
@@ -177,136 +229,143 @@ func (m Model) renderProxiesTab() string {
 			continue
 		}
 
-		collapsed := m.collapsed[groupName]
-		arrow := "▼"
-		if collapsed {
-			arrow = "▶"
-		}
 		isActiveGroup := gi == m.groupIdx
+		collapsed := m.collapsed[groupName]
 
-		groupTitle := fmt.Sprintf(" %s [%s]  节点:%d  已选:%s",
-			arrow, groupName, len(group.All), MutedStyle.Render(group.Now))
-		if isActiveGroup {
-			b.WriteString(SelectedStyle.Render(groupTitle))
-		} else {
-			b.WriteString(GroupHeaderStyle.Render(groupTitle))
+		// Group header
+		arrow := "▾"
+		if collapsed {
+			arrow = "▸"
 		}
+
+		groupHdr := fmt.Sprintf(" %s %s  [%d 节点]  当前: %s",
+			arrow, AccentStyle.Render(groupName), len(group.All), BoldStyle.Render(group.Now))
+
+		if isActiveGroup {
+			groupHdr = lipgloss.NewStyle().
+				Background(lipgloss.Color(colorBgLight)).
+				Padding(0, 1).
+				Render(groupHdr)
+		} else {
+			groupHdr = MutedStyle.Render(groupHdr)
+		}
+		b.WriteString(groupHdr)
 		b.WriteString("\n")
 
-		if collapsed {
-			continue
-		}
-
-		// Only show nodes for active group (ccswitch-style: one group at a time)
-		if !isActiveGroup {
-			continue
-		}
-
-		// Find max delay for bar scaling
-		maxDelay := 0
-		for _, node := range group.All {
-			if d, ok := m.delayResults[node]; ok && d > maxDelay {
-				maxDelay = d
+		if collapsed || !isActiveGroup {
+			if gi < len(m.groups)-1 {
+				b.WriteString("\n")
 			}
-		}
-		if maxDelay < 50 {
-			maxDelay = 500 // default scale
+			continue
 		}
 
-		// Apply search filter
+		// Collect nodes and find max delay
 		nodes := group.All
-		if m.searchMode && m.searchQuery != "" {
+		if m.searchQuery != "" {
 			filtered := make([]string, 0)
-			for _, node := range group.All {
-				if strings.Contains(strings.ToLower(node), strings.ToLower(m.searchQuery)) {
+			q := strings.ToLower(m.searchQuery)
+			for _, node := range nodes {
+				if strings.Contains(strings.ToLower(node), q) {
 					filtered = append(filtered, node)
 				}
 			}
 			nodes = filtered
 		}
 
+		maxDelay := 0
+		for _, node := range nodes {
+			if d, ok := m.delayResults[node]; ok && d > maxDelay {
+				maxDelay = d
+			}
+		}
+		if maxDelay < 50 {
+			maxDelay = 500
+		}
+
+		// Render each node
+		visibleCount := 0
 		for ni, node := range nodes {
-			marker := "○"
-			if node == group.Now {
-				marker = "●"
+			// Determine node type from proxy info
+			nodeType := ""
+			if p, ok := m.proxies.Proxies[node]; ok {
+				nodeType = p.Type
 			}
 
-			latStr := "   -ms"
-			if d, ok := m.delayResults[node]; ok && d > 0 {
-				latStr = lipgloss.NewStyle().Foreground(LatencyColor(d)).Render(fmt.Sprintf("%4dms", d))
-			}
+			isNow := node == group.Now
+			isSelected := ni == m.nodeIdx
 
-			bar := LatencyBar(m.delayResults[node], maxDelay, 6)
-
-			line := fmt.Sprintf("  %s %-20s %s  %s", marker, node, latStr, bar)
-
-			if ni == m.nodeIdx {
-				b.WriteString(SelectedStyle.Render(line))
-			} else {
-				b.WriteString(NormalStyle.Render(line))
-			}
+			line := m.renderProxyItem(node, isNow, isSelected, maxDelay, nodeType)
+			b.WriteString(line)
 			b.WriteString("\n")
+			visibleCount++
 		}
 
 		if m.speedtesting {
 			b.WriteString(MutedStyle.Render("  ⏳ 正在测速..."))
 			b.WriteString("\n")
 		}
-		b.WriteString("\n")
+
+		// Scroll hint if many nodes
+		if visibleCount > 15 && m.nodeIdx > 10 {
+			b.WriteString(ScrollHintStyle.Width(panelW - 4).Render(fmt.Sprintf("↑ %d/%d ↑", m.nodeIdx+1, visibleCount)))
+			b.WriteString("\n")
+		}
+
+		if gi < len(m.groups)-1 {
+			b.WriteString("\n")
+		}
 	}
 
-	return PanelStyle.Width(panelW).Render(b.String())
+	return PanelStyle.Width(panelW - 2).Render(b.String())
 }
 
-// ─── Tab 2: Connections ─────────────────────────────────────
+// ─── Tab 2: Connections ───────────────────────────────────────
 
 func (m Model) renderConnectionsTab() string {
 	panelW := m.width - 4
 	var b strings.Builder
 
 	if m.connectionsErr != nil {
-		b.WriteString(MutedStyle.Render(fmt.Sprintf(" 错误: %v", m.connectionsErr)))
-		return PanelStyle.Width(panelW).Render(b.String())
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(colorDanger)).Render(fmt.Sprintf("✗ 错误: %v", m.connectionsErr)))
+		return PanelStyle.Width(panelW - 2).Render(b.String())
 	}
 
-	b.WriteString(MutedStyle.Render(fmt.Sprintf(" 协议  目标主机                          代理链                       上行      下行\n")))
-	b.WriteString(MutedStyle.Render(" " + strings.Repeat("─", panelW-1)))
+	// Column header
+	header := fmt.Sprintf("  %-6s  %-30s  %-22s  %8s  %8s",
+		"协议", "目标主机", "代理链", "上行", "下行")
+	b.WriteString(ListHeaderStyle.Render(header))
+	b.WriteString("\n")
+	b.WriteString(DividerStyle.Render("  " + strings.Repeat("─", panelW-8)))
 	b.WriteString("\n")
 
 	if len(m.connections) == 0 {
-		b.WriteString(MutedStyle.Render("\n 暂无活跃连接"))
+		b.WriteString(MutedStyle.Render("\n  暂无活跃连接"))
 	} else {
 		for i, conn := range m.connections {
-			host := conn.Metadata.Host
-			if len(host) > 32 {
-				host = host[:31] + "…"
-			}
-			chain := strings.Join(conn.Chains, " → ")
-			if len(chain) > 26 {
-				chain = chain[:25] + "…"
-			}
+			host := Truncate(conn.Metadata.Host, 28)
+			chain := Truncate(strings.Join(conn.Chains, " → "), 20)
 			up := FormatBytes(conn.Upload)
 			down := FormatBytes(conn.Download)
 
-			line := fmt.Sprintf(" %-4s  %-32s  %-26s  %6s  %6s",
+			line := fmt.Sprintf("  %-6s  %-30s  %-22s  %8s  %8s",
 				conn.Metadata.Network, host, chain, up, down)
 
 			if i == m.connIdx {
-				b.WriteString(SelectedStyle.Render(line))
+				b.WriteString(SelectedStyle.Padding(0, 1).Render(line))
 			} else {
-				b.WriteString(NormalStyle.Render(line))
+				b.WriteString(NormalStyle.Padding(0, 1).Render(line))
 			}
 			b.WriteString("\n")
 		}
 	}
 
 	b.WriteString("\n")
-	b.WriteString(MutedStyle.Render(fmt.Sprintf(" 共 %d 条连接", len(m.connections))))
+	b.WriteString(MutedStyle.Render(fmt.Sprintf("  共 %d 条活跃连接", len(m.connections))))
 
-	return PanelStyle.Width(panelW).Render(b.String())
+	return PanelStyle.Width(panelW - 2).Render(b.String())
 }
 
-// ─── Tab 3: Logs ────────────────────────────────────────────
+// ─── Tab 3: Logs ──────────────────────────────────────────────
 
 func (m Model) renderLogsTab() string {
 	panelW := m.width - 4
@@ -323,22 +382,27 @@ func (m Model) renderLogsTab() string {
 	case "debug":
 		levelLabel = "DEBUG"
 	}
+
 	autoLabel := "关"
 	if m.autoScroll {
 		autoLabel = "开"
 	}
-	b.WriteString(MutedStyle.Render(fmt.Sprintf(" 级别:%s  自动滚动:%s  共 %d 条", levelLabel, autoLabel, len(m.logs))))
+
+	// Filter bar
+	filterBar := fmt.Sprintf("  级别: %s  │  自动滚动: %s  │  共 %d 条",
+		BoldStyle.Render(levelLabel), BoldStyle.Render(autoLabel), len(m.logs))
+	b.WriteString(MutedStyle.Render(filterBar))
 	b.WriteString("\n")
-	b.WriteString(MutedStyle.Render(" " + strings.Repeat("─", panelW-1)))
+	b.WriteString(DividerStyle.Render("  " + strings.Repeat("─", panelW-8)))
 	b.WriteString("\n")
 
 	if m.logsErr != nil {
-		b.WriteString(MutedStyle.Render(fmt.Sprintf(" 错误: %v", m.logsErr)))
-		return PanelStyle.Width(panelW).Render(b.String())
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(colorDanger)).Render(fmt.Sprintf("✗ 错误: %v", m.logsErr)))
+		return PanelStyle.Width(panelW - 2).Render(b.String())
 	}
 
 	if len(m.logs) == 0 {
-		b.WriteString(MutedStyle.Render("\n 暂无日志"))
+		b.WriteString(MutedStyle.Render("\n  暂无日志"))
 	} else {
 		for _, entry := range m.logs {
 			if m.logLevel != "" && entry.Type != m.logLevel {
@@ -357,114 +421,101 @@ func (m Model) renderLogsTab() string {
 			default:
 				style = NormalStyle
 			}
-			b.WriteString(style.Render(fmt.Sprintf(" %s", entry.Payload)))
+			b.WriteString(style.Render(fmt.Sprintf("  %s", entry.Payload)))
 			b.WriteString("\n")
 		}
 	}
 
-	return PanelStyle.Width(panelW).Render(b.String())
+	return PanelStyle.Width(panelW - 2).Render(b.String())
 }
 
-// ─── Tab 4: Rules ───────────────────────────────────────────
+// ─── Tab 4: Rules ─────────────────────────────────────────────
 
 func (m Model) renderRulesTab() string {
 	panelW := m.width - 4
 	var b strings.Builder
 
 	if m.rulesErr != nil {
-		b.WriteString(MutedStyle.Render(fmt.Sprintf(" 错误: %v", m.rulesErr)))
-		return PanelStyle.Width(panelW).Render(b.String())
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(colorDanger)).Render(fmt.Sprintf("✗ 错误: %v", m.rulesErr)))
+		return PanelStyle.Width(panelW - 2).Render(b.String())
 	}
 
-	b.WriteString(MutedStyle.Render(fmt.Sprintf(" 类型          匹配内容                            代理目标\n")))
-	b.WriteString(MutedStyle.Render(" " + strings.Repeat("─", panelW-1)))
+	// Column header
+	header := fmt.Sprintf("  %-16s  %-36s  %s", "类型", "匹配内容", "代理目标")
+	b.WriteString(ListHeaderStyle.Render(header))
+	b.WriteString("\n")
+	b.WriteString(DividerStyle.Render("  " + strings.Repeat("─", panelW-8)))
 	b.WriteString("\n")
 
 	if len(m.rules) == 0 {
-		b.WriteString(MutedStyle.Render("\n 暂无规则"))
+		b.WriteString(MutedStyle.Render("\n  暂无规则"))
 	} else {
 		for i, rule := range m.rules {
-			payload := rule.Payload
-			if len(payload) > 36 {
-				payload = payload[:35] + "…"
-			}
-			proxy := rule.Proxy
-			if len(proxy) > 24 {
-				proxy = proxy[:23] + "…"
-			}
-			line := fmt.Sprintf(" %-14s %-36s %s", rule.Type, payload, proxy)
+			payload := Truncate(rule.Payload, 34)
+			proxy := Truncate(rule.Proxy, 22)
+
+			line := fmt.Sprintf("  %-16s  %-36s  %s", rule.Type, payload, proxy)
 			if i == m.ruleIdx {
-				b.WriteString(SelectedStyle.Render(line))
+				b.WriteString(SelectedStyle.Padding(0, 1).Render(line))
 			} else {
-				b.WriteString(NormalStyle.Render(line))
+				b.WriteString(NormalStyle.Padding(0, 1).Render(line))
 			}
 			b.WriteString("\n")
 		}
 	}
 
 	b.WriteString("\n")
-	b.WriteString(MutedStyle.Render(fmt.Sprintf(" 共 %d 条规则", len(m.rules))))
+	b.WriteString(MutedStyle.Render(fmt.Sprintf("  共 %d 条规则", len(m.rules))))
 
-	return PanelStyle.Width(panelW).Render(b.String())
+	return PanelStyle.Width(panelW - 2).Render(b.String())
 }
 
-// ─── Tab 5: Subscriptions ───────────────────────────────────
+// ─── Tab 5: Subscriptions ─────────────────────────────────────
 
 func (m Model) renderSubsTab() string {
 	panelW := m.width - 4
 	var b strings.Builder
 
-	type subInfo struct {
-		Name        string
-		URL         string
-		Enabled     bool
-		LastUpdated int64
-		Interval    int
-	}
-	var subs []subInfo
-	if m.cfgMgr != nil {
-		for _, s := range m.cfgMgr.Config().Subscriptions {
-			subs = append(subs, subInfo{
-				Name:        s.Name,
-				URL:         s.URL,
-				Enabled:     true,
-				LastUpdated: s.LastUpdated,
-				Interval:    s.Interval,
-			})
-		}
+	if m.cfgMgr == nil {
+		return PanelStyle.Width(panelW - 2).Render(MutedStyle.Render("配置未加载"))
 	}
 
+	subs := m.cfgMgr.Config().Subscriptions
 	if len(subs) == 0 {
-		b.WriteString(MutedStyle.Render(" 暂无订阅，按 a 添加"))
-		return PanelStyle.Width(panelW).Render(b.String())
+		empty := MutedStyle.Render("暂无订阅") + "\n\n" +
+			HelpKeyStyle.Render("a") + " 添加订阅  " +
+			HelpKeyStyle.Render("u") + " 更新全部"
+		return PanelStyle.Width(panelW - 2).Render(empty)
 	}
+
+	// Header
+	b.WriteString(ListHeaderStyle.Render(fmt.Sprintf("  状态  %-16s  %-40s  %s", "名称", "URL", "更新间隔")))
+	b.WriteString("\n")
+	b.WriteString(DividerStyle.Render("  " + strings.Repeat("─", panelW-8)))
+	b.WriteString("\n")
 
 	for i, s := range subs {
-		status := StatusRunningStyle.Render("● 启用")
-		if !s.Enabled {
-			status = StatusStoppedStyle.Render("○ 停用")
-		}
-
-		updated := "从未更新"
+		status := StatusRunningStyle.Render("●")
+		urlDisplay := Truncate(s.URL, 38)
+		interval := fmt.Sprintf("%dh", s.Interval/3600)
+		updated := "从未"
 		if s.LastUpdated > 0 {
 			updated = FormatDuration(time.Now().Unix() - s.LastUpdated) + "前"
 		}
 
-		urlDisplay := s.URL
-		if len(urlDisplay) > 44 {
-			urlDisplay = urlDisplay[:43] + "…"
-		}
-
-		line := fmt.Sprintf(" %s  %-12s  %s  更新间隔:%s  %s",
-			status, s.Name, urlDisplay, fmt.Sprintf("%dh", s.Interval/3600), MutedStyle.Render(updated))
+		line := fmt.Sprintf("  %s   %-16s  %-40s  %-8s  %s",
+			status, s.Name, urlDisplay, interval, MutedStyle.Render(updated))
 
 		if i == m.subIdx {
-			b.WriteString(SelectedStyle.Render(line))
+			b.WriteString(SelectedStyle.Padding(0, 1).Render(line))
 		} else {
-			b.WriteString(NormalStyle.Render(line))
+			b.WriteString(NormalStyle.Padding(0, 1).Render(line))
 		}
 		b.WriteString("\n")
 	}
 
-	return PanelStyle.Width(panelW).Render(b.String())
+	b.WriteString("\n")
+	b.WriteString(MutedStyle.Render(fmt.Sprintf("  共 %d 个订阅", len(subs))))
+
+	return PanelStyle.Width(panelW - 2).Render(b.String())
 }
