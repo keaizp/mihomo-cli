@@ -10,62 +10,62 @@ import (
 
 var subCmd = &cobra.Command{
 	Use:   "sub",
-	Short: "Manage subscriptions",
+	Short: "管理订阅",
 }
 
 var subAddCmd = &cobra.Command{
-	Use:   "add <name> <url>",
-	Short: "Add a subscription",
+	Use:   "add <名称> <URL>",
+	Short: "添加订阅",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cfgMgr == nil {
-			return fmt.Errorf("config manager not initialized")
+			return fmt.Errorf("配置管理器未初始化")
 		}
 		if err := cfgMgr.AddSubscription(args[0], args[1]); err != nil {
 			return err
 		}
-		fmt.Printf("Subscription %q added\n", args[0])
+		fmt.Printf("✓ 已添加订阅: %s\n", args[0])
 		return nil
 	},
 }
 
 var subRemoveCmd = &cobra.Command{
-	Use:   "remove <name>",
-	Short: "Remove a subscription",
+	Use:   "remove <名称>",
+	Short: "删除订阅",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cfgMgr == nil {
-			return fmt.Errorf("config manager not initialized")
+			return fmt.Errorf("配置管理器未初始化")
 		}
 		if err := cfgMgr.RemoveSubscription(args[0]); err != nil {
 			return err
 		}
-		fmt.Printf("Subscription %q removed\n", args[0])
+		fmt.Printf("✓ 已删除订阅: %s\n", args[0])
 		return nil
 	},
 }
 
 var subUpdateCmd = &cobra.Command{
-	Use:   "update [name]",
-	Short: "Update subscriptions (all or by name)",
+	Use:   "update [名称]",
+	Short: "更新订阅（不指定名称则更新全部）",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if subMgr == nil {
-			return fmt.Errorf("subscription manager not initialized")
+			return fmt.Errorf("订阅管理器未初始化")
 		}
 		if len(args) > 0 {
 			if err := subMgr.UpdateSubscription(args[0]); err != nil {
 				return err
 			}
-			fmt.Printf("Subscription %q updated\n", args[0])
+			fmt.Printf("✓ 已更新: %s\n", args[0])
 		} else {
 			errs := subMgr.UpdateAll()
 			if len(errs) > 0 {
 				for _, e := range errs {
 					fmt.Fprintln(os.Stderr, e)
 				}
-				return fmt.Errorf("%d subscription(s) failed to update", len(errs))
+				return fmt.Errorf("%d 个订阅更新失败", len(errs))
 			}
-			fmt.Println("All subscriptions updated")
+			fmt.Println("✓ 订阅已全部更新")
 		}
 		return nil
 	},
@@ -73,18 +73,18 @@ var subUpdateCmd = &cobra.Command{
 
 var subListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List subscriptions",
+	Short: "列出所有订阅",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cfgMgr == nil {
-			return fmt.Errorf("config manager not initialized")
+			return fmt.Errorf("配置管理器未初始化")
 		}
 		subs := cfgMgr.Config().Subscriptions
 		if len(subs) == 0 {
-			fmt.Println("No subscriptions configured")
+			fmt.Println("暂无订阅，使用 sub add 添加")
 			return nil
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "NAME\tURL")
+		fmt.Fprintln(w, "名称\tURL")
 		for _, s := range subs {
 			fmt.Fprintf(w, "%s\t%s\n", s.Name, s.URL)
 		}

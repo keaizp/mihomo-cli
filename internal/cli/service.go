@@ -8,93 +8,93 @@ import (
 
 var serviceCmd = &cobra.Command{
 	Use:   "service",
-	Short: "Manage mihomo kernel service",
+	Short: "管理 mihomo 服务",
 }
 
 var serviceStartCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start mihomo kernel",
+	Short: "启动 mihomo",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if kernelMgr == nil {
-			return fmt.Errorf("kernel manager not initialized")
+			return fmt.Errorf("内核管理器未初始化")
 		}
 		if kernelMgr.IsRunning() {
-			fmt.Println("mihomo is already running")
+			fmt.Println("✓ 已运行中")
 			return nil
 		}
 		if !kernelMgr.IsInstalled() {
 			if err := kernelMgr.ExtractEmbedded(kernelMgr.BinPath()); err != nil {
-				return fmt.Errorf("kernel not installed: install via 'mihomo-cli kernel install'")
+				return fmt.Errorf("内核未安装，请先运行 mihomo-cli 自动部署")
 			}
 		}
 		if err := kernelMgr.Start(); err != nil {
-			return fmt.Errorf("start mihomo: %w", err)
+			return fmt.Errorf("启动失败: %w", err)
 		}
-		fmt.Println("mihomo started")
+		fmt.Println("✓ 已启动")
 		return nil
 	},
 }
 
 var serviceStopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "Stop mihomo kernel",
+	Short: "停止 mihomo",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if kernelMgr == nil {
-			return fmt.Errorf("kernel manager not initialized")
+			return fmt.Errorf("内核管理器未初始化")
 		}
 		if err := kernelMgr.Stop(); err != nil {
-			return fmt.Errorf("stop mihomo: %w", err)
+			return fmt.Errorf("停止失败: %w", err)
 		}
-		fmt.Println("mihomo stopped")
+		fmt.Println("✓ 已停止")
 		return nil
 	},
 }
 
 var serviceRestartCmd = &cobra.Command{
 	Use:   "restart",
-	Short: "Restart mihomo kernel",
+	Short: "重启 mihomo",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if kernelMgr == nil {
-			return fmt.Errorf("kernel manager not initialized")
+			return fmt.Errorf("内核管理器未初始化")
 		}
 		if !kernelMgr.IsInstalled() {
 			if err := kernelMgr.ExtractEmbedded(kernelMgr.BinPath()); err != nil {
-				return fmt.Errorf("kernel not installed: install via 'mihomo-cli kernel install'")
+				return fmt.Errorf("内核未安装")
 			}
 		}
 		if err := kernelMgr.Restart(); err != nil {
-			return fmt.Errorf("restart mihomo: %w", err)
+			return fmt.Errorf("重启失败: %w", err)
 		}
-		fmt.Println("mihomo restarted")
+		fmt.Println("✓ 已重启")
 		return nil
 	},
 }
 
 var serviceStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show mihomo kernel status",
+	Short: "查看运行状态",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if kernelMgr == nil {
-			return fmt.Errorf("kernel manager not initialized")
+			return fmt.Errorf("内核管理器未初始化")
 		}
-		fmt.Printf("mihomo: %s\n", kernelMgr.Status())
+		fmt.Println(kernelMgr.Status())
 		return nil
 	},
 }
 
 var serviceLogsCmd = &cobra.Command{
 	Use:   "logs",
-	Short: "Show mihomo kernel logs",
+	Short: "查看日志",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if kernelMgr == nil {
-			return fmt.Errorf("kernel manager not initialized")
+			return fmt.Errorf("内核管理器未初始化")
 		}
 		lines, err := kernelMgr.ReadLogs(50)
 		if err != nil {
-			return fmt.Errorf("read logs: %w", err)
+			return fmt.Errorf("读取日志失败: %w", err)
 		}
 		if len(lines) == 0 {
-			fmt.Println("(no logs)")
+			fmt.Println("(暂无日志)")
 			return nil
 		}
 		for _, line := range lines {
@@ -106,19 +106,19 @@ var serviceLogsCmd = &cobra.Command{
 
 var servicePrepareCmd = &cobra.Command{
 	Use:   "prepare",
-	Short: "Prepare kernel and config for systemd (used as ExecStartPre)",
+	Short: "准备内核和配置（systemd ExecStartPre 使用）",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if kernelMgr == nil {
-			return fmt.Errorf("kernel manager not initialized")
+			return fmt.Errorf("内核管理器未初始化")
 		}
 		if !kernelMgr.IsInstalled() {
 			if err := kernelMgr.ExtractEmbedded(kernelMgr.BinPath()); err != nil {
-				return fmt.Errorf("kernel not installed: %w", err)
+				return fmt.Errorf("内核未安装: %w", err)
 			}
 		}
 		if subMgr != nil {
 			if err := subMgr.MergeAndGenerate(); err != nil {
-				return fmt.Errorf("generate config: %w", err)
+				return fmt.Errorf("生成配置失败: %w", err)
 			}
 		}
 		return nil

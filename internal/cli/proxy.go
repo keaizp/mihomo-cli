@@ -12,7 +12,7 @@ import (
 
 var proxyCmd = &cobra.Command{
 	Use:   "proxy",
-	Short: "Manage proxy nodes",
+	Short: "管理代理节点",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		ac, err := ensureMihomo()
 		if err != nil {
@@ -25,25 +25,25 @@ var proxyCmd = &cobra.Command{
 
 var proxyListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List proxy groups and nodes",
+	Short: "列出代理组和节点",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if apiClient == nil {
-			return fmt.Errorf("API client not available — is mihomo running?")
+			return fmt.Errorf("API 不可用，mihomo 是否在运行？")
 		}
 		proxies, err := apiClient.GetProxies()
 		if err != nil {
-			return fmt.Errorf("get proxies: %w", err)
+			return fmt.Errorf("获取代理列表失败: %w", err)
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "GROUP\tCURRENT\tNODES")
+		fmt.Fprintln(w, "代理组\t当前节点\t可选节点")
 		for name, p := range proxies.Proxies {
 			if p.All != nil {
 				nodes := ""
 				for i, n := range p.All {
 					marker := ""
 					if n == p.Now {
-						marker = "*"
+						marker = "● "
 					}
 					if i > 0 {
 						nodes += ", "
@@ -59,32 +59,32 @@ var proxyListCmd = &cobra.Command{
 }
 
 var proxySetCmd = &cobra.Command{
-	Use:   "set <group> <node>",
-	Short: "Switch proxy node in a group",
+	Use:   "set <代理组> <节点名>",
+	Short: "切换节点",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if apiClient == nil {
-			return fmt.Errorf("API client not available — is mihomo running?")
+			return fmt.Errorf("API 不可用，mihomo 是否在运行？")
 		}
 		if err := apiClient.SwitchProxy(args[0], args[1]); err != nil {
-			return fmt.Errorf("switch proxy: %w", err)
+			return fmt.Errorf("切换失败: %w", err)
 		}
-		fmt.Printf("Switched [%s] → %s\n", args[0], args[1])
+		fmt.Printf("✓ 已切换 [%s] → %s\n", args[0], args[1])
 		return nil
 	},
 }
 
 var proxyTestCmd = &cobra.Command{
-	Use:   "test [node]",
-	Short: "Test proxy latency",
+	Use:   "test [节点名]",
+	Short: "测试节点延迟",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if apiClient == nil {
-			return fmt.Errorf("API client not available — is mihomo running?")
+			return fmt.Errorf("API 不可用，mihomo 是否在运行？")
 		}
 
 		proxies, err := apiClient.GetProxies()
 		if err != nil {
-			return fmt.Errorf("get proxies: %w", err)
+			return fmt.Errorf("获取代理列表失败: %w", err)
 		}
 
 		type result struct {
@@ -120,7 +120,7 @@ var proxyTestCmd = &cobra.Command{
 		sort.Slice(all, func(i, j int) bool { return all[i].delay < all[j].delay })
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "NODE\tDELAY")
+		fmt.Fprintln(w, "节点\t延迟")
 		for _, r := range all {
 			fmt.Fprintf(w, "%s\t%dms\n", r.name, r.delay)
 		}
@@ -130,24 +130,24 @@ var proxyTestCmd = &cobra.Command{
 }
 
 var proxyInfoCmd = &cobra.Command{
-	Use:   "info <node>",
-	Short: "Show proxy node details",
+	Use:   "info <节点名>",
+	Short: "查看节点详情",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if apiClient == nil {
-			return fmt.Errorf("API client not available — is mihomo running?")
+			return fmt.Errorf("API 不可用，mihomo 是否在运行？")
 		}
 		proxies, err := apiClient.GetProxies()
 		if err != nil {
-			return fmt.Errorf("get proxies: %w", err)
+			return fmt.Errorf("获取代理列表失败: %w", err)
 		}
 		p, ok := proxies.Proxies[args[0]]
 		if !ok {
-			return fmt.Errorf("node %q not found", args[0])
+			return fmt.Errorf("节点 %q 不存在", args[0])
 		}
-		fmt.Printf("Name: %s\nType: %s\n", p.Name, p.Type)
+		fmt.Printf("名称: %s\n类型: %s\n", p.Name, p.Type)
 		if len(p.History) > 0 {
-			fmt.Printf("Last delay: %dms\n", p.History[len(p.History)-1].Delay)
+			fmt.Printf("最近延迟: %dms\n", p.History[len(p.History)-1].Delay)
 		}
 		return nil
 	},

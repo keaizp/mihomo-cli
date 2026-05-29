@@ -10,32 +10,32 @@ import (
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Manage mihomo-cli configuration",
+	Short: "管理配置",
 }
 
 var configShowCmd = &cobra.Command{
 	Use:   "show",
-	Short: "Show current configuration",
+	Short: "查看当前配置",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cfgMgr == nil {
-			return fmt.Errorf("config manager not initialized")
+			return fmt.Errorf("配置管理器未初始化")
 		}
 		cfg := cfgMgr.Config()
-		fmt.Printf("Mode: %s\n", cfg.Mode)
-		fmt.Printf("HTTP Port: %d\n", cfg.Core.HTTPPort)
-		fmt.Printf("SOCKS Port: %d\n", cfg.Core.SOCKSPort)
-		fmt.Printf("API Port: %d\n", cfg.Core.APIPort)
-		fmt.Printf("Subscriptions: %d\n", len(cfg.Subscriptions))
+		fmt.Printf("模式: %s\n", cfg.Mode)
+		fmt.Printf("HTTP 端口: %d\n", cfg.Core.HTTPPort)
+		fmt.Printf("SOCKS 端口: %d\n", cfg.Core.SOCKSPort)
+		fmt.Printf("API 端口: %d\n", cfg.Core.APIPort)
+		fmt.Printf("订阅数: %d\n", len(cfg.Subscriptions))
 		return nil
 	},
 }
 
 var configEditCmd = &cobra.Command{
 	Use:   "edit",
-	Short: "Edit config with $EDITOR",
+	Short: "编辑配置文件",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cfgMgr == nil {
-			return fmt.Errorf("config manager not initialized")
+			return fmt.Errorf("配置管理器未初始化")
 		}
 		editor := os.Getenv("EDITOR")
 		if editor == "" {
@@ -52,16 +52,16 @@ var configEditCmd = &cobra.Command{
 
 var configReloadCmd = &cobra.Command{
 	Use:   "reload",
-	Short: "Reload mihomo configuration",
+	Short: "重载配置（无需重启）",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ac, err := ensureMihomo()
 		if err != nil {
 			return err
 		}
 		if err := ac.ReloadConfig(); err != nil {
-			return fmt.Errorf("reload config: %w", err)
+			return fmt.Errorf("重载失败: %w", err)
 		}
-		fmt.Println("Configuration reloaded")
+		fmt.Println("✓ 配置已重载")
 		return nil
 	},
 }

@@ -28,22 +28,22 @@ func SetSubscriptionManager(mgr *subscription.Manager) { subMgr = mgr }
 
 var rootCmd = &cobra.Command{
 	Use:   "mihomo-cli",
-	Short: "Manage mihomo proxy from the command line",
-	Long:  "A CLI tool for managing mihomo proxy subscriptions, nodes, modes, and service lifecycle.",
+	Short: "mihomo 代理客户端",
+	Long:  "管理 mihomo 代理的订阅、节点、模式和服务的命令行工具。",
 	Run: func(cmd *cobra.Command, args []string) {
 		ac, err := ensureMihomo()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "✗ %v\n", err)
 			os.Exit(1)
 		}
 		if ac == nil {
-			fmt.Fprintln(os.Stderr, "Mihomo is not running. Start it with: mihomo-cli service start")
+			fmt.Fprintln(os.Stderr, "✗ mihomo 未运行，请先执行: mihomo-cli service start")
 			os.Exit(1)
 		}
 		model := tui.NewModel(ac, kernelMgr, subMgr, cfgMgr)
 		p := tea.NewProgram(model, tea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "✗ TUI 启动失败: %v\n", err)
 			os.Exit(1)
 		}
 	},
@@ -139,7 +139,7 @@ Fish:
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
 		os.Exit(1)
 	}
 }
