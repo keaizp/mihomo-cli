@@ -1,22 +1,22 @@
-.PHONY: build clean download-kernel install uninstall install-completions
-
-MIHOMO_VERSION := v1.18.10
-EMBED_DIR     := internal/kernel/embedded
-EMBED_FILE    := $(EMBED_DIR)/mihomo-linux-amd64.gz
-MIHOMO_URL    := https://github.com/MetaCubeX/mihomo/releases/download/$(MIHOMO_VERSION)/mihomo-linux-amd64-$(MIHOMO_VERSION).gz
+.PHONY: build clean update-kernel install uninstall install-completions
 
 # Install paths (override with: make install PREFIX=/usr)
 PREFIX  ?= /usr/local
 BINDIR  ?= $(PREFIX)/bin
 DATADIR ?= /var/lib/mihomo-cli
 
-build: download-kernel
+build:
 	go build -ldflags="-s -w" -o mihomo-cli ./cmd/mihomo-cli/
 	@echo "Build complete: ./mihomo-cli"
 
-download-kernel: $(EMBED_FILE)
+# update-kernel downloads a newer mihomo release (optional, for developers).
+# The repo already ships with a working kernel embedded — no download needed for build.
+MIHOMO_VERSION := v1.18.10
+EMBED_DIR     := internal/kernel/embedded
+EMBED_FILE    := $(EMBED_DIR)/mihomo-linux-amd64.gz
+MIHOMO_URL    := https://github.com/MetaCubeX/mihomo/releases/download/$(MIHOMO_VERSION)/mihomo-linux-amd64-$(MIHOMO_VERSION).gz
 
-$(EMBED_FILE):
+update-kernel:
 	@mkdir -p $(EMBED_DIR)
 	@echo "Downloading mihomo $(MIHOMO_VERSION)..."
 	@curl -fL -o $(EMBED_FILE) $(MIHOMO_URL) || ( \
@@ -71,4 +71,3 @@ install-completions:
 
 clean:
 	rm -f mihomo-cli mihomo-cli.exe
-	rm -f $(EMBED_FILE)

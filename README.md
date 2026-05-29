@@ -4,6 +4,8 @@ Linux 代理管理工具，CLI + TUI 双模式，对标 Clash Verge 全部功能
 
 ## 安装
 
+无需联网下载，内核已嵌入仓库。只需 Go 编译器：
+
 ```bash
 git clone <repo-url> && cd mihomo-cli
 make build
