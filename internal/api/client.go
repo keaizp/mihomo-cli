@@ -129,6 +129,42 @@ func (c *Client) CloseConnection(id string) error {
 	return c.do("DELETE", "/connections/"+url.PathEscape(id), nil, nil)
 }
 
+// LogEntry represents a single log line from mihomo.
+type LogEntry struct {
+	Type    string `json:"type"`
+	Payload string `json:"payload"`
+}
+
+// Rule represents a routing rule.
+type Rule struct {
+	Type    string `json:"type"`
+	Payload string `json:"payload"`
+	Proxy   string `json:"proxy"`
+}
+
+// RulesResponse is the response from GET /rules.
+type RulesResponse struct {
+	Rules []Rule `json:"rules"`
+}
+
+// GetLogs fetches recent log entries.
+func (c *Client) GetLogs() ([]LogEntry, error) {
+	var logs []LogEntry
+	if err := c.do("GET", "/logs", nil, &logs); err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
+// GetRules fetches all routing rules.
+func (c *Client) GetRules() (*RulesResponse, error) {
+	var resp RulesResponse
+	if err := c.do("GET", "/rules", nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 // ReloadConfig triggers mihomo to reload its configuration.
 func (c *Client) ReloadConfig() error {
 	body := strings.NewReader(`{"path":""}`)
