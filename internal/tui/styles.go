@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/rivo/uniseg"
 )
 
 // Color palette
@@ -219,11 +220,52 @@ func FormatDuration(seconds int64) string {
 	return fmt.Sprintf("%dd", seconds/86400)
 }
 
-// Truncate clips a string to maxLen with ellipsis.
-func Truncate(s string, maxLen int) string {
-	runes := []rune(s)
-	if len(runes) <= maxLen {
+// displayWidth returns the display cell width of a string.
+func displayWidth(s string) int {
+	return uniseg.StringWidth(s)
+}
+
+// Truncate clips a string to maxWidth display cells with ellipsis.
+func Truncate(s string, maxWidth int) string {
+	if displayWidth(s) <= maxWidth {
 		return s
 	}
-	return string(runes[:maxLen-1]) + "…"
+	tail := "…"
+	limit := maxWidth - displayWidth(tail)
+	if limit < 0 {
+		limit = 0
+	}
+	gr := uniseg.NewGraphemes(s)
+	cut := 0
+	w := 0
+	for gr.Next() {
+		cw := gr.Width()
+		if w+cw > limit {
+			break
+		}
+		w += cw
+		cut += len(gr.Str())
+	}
+	if cut == 0 {
+		return tail
+	}
+	return s[:cut] + tail
+}
+
+// PadRight pads s on the right with spaces to reach width display cells.
+func PadRight(s string, width int) string {
+	w := displayWidth(s)
+	if w >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-w)
+}
+
+// PadLeft pads s on the left with spaces to reach width display cells.
+func PadLeft(s string, width int) string {
+	w := displayWidth(s)
+	if w >= width {
+		return s
+	}
+	return strings.Repeat(" ", width-w) + s
 }

@@ -163,34 +163,52 @@ func (m Model) renderFooter() string {
 	return lipgloss.JoinVertical(lipgloss.Left, divider, FooterStyle.Width(m.width-2).Render(keyBar))
 }
 
-// ─── Column Layout Constants ──────────────────────────────────
+// ─── Column Layout ───────────────────────────────────────────
 //
 //	┌ marker ┐  ┌── name (L) ──┐  ┌ delay (R) ┐  ┌── bar ──┐  ┌ type (L) ┐
 //	  ●         香港 01                   12ms  ████······      ss
 const (
-	colMarker = 4  // "  ● " — marker centered
-	colName   = 26 // left-aligned
-	colDelay  = 6  // right-aligned, e.g. "  12ms"
-	colBar    = 10 // latency bar
-	colType   = 8  // left-aligned type badge
-	colGap    = 2  // gap between columns
+	colMarker = 4 // "  ● " — marker centered, fixed
+	colDelay  = 6 // right-aligned, e.g. " 999ms"
+	colBarMin = 8 // minimum bar width
+	colType   = 8 // left-aligned type badge
+	colGap    = 2 // gap between columns
 )
 
-var proxyHeaderLine = fmt.Sprintf(
-	"%-*s%-*s%-*s%-*s%-*s%-*s%-*s%-*s",
-	colMarker, "",
-	colName, "节点",
-	colGap, "",
-	colDelay, "延迟",
-	colGap, "",
-	colBar, "速度柱",
-	colGap, "",
-	colType, "类型",
-)
+// proxyColWidths computes dynamic column widths based on terminal size.
+func (m Model) proxyColWidths() (name, bar int) {
+	avail := m.width - 14
+	if avail < 60 {
+		avail = 60
+	}
+	bar = colBarMin + (avail-60)/8
+	if bar > 16 {
+		bar = 16
+	}
+	name = avail - colMarker - colDelay - bar - colType - 3*colGap
+	if name < 10 {
+		name = 10
+	}
+	return
+}
+
+func proxyHeaderLine(name, bar int) string {
+	return fmt.Sprintf(
+		"%-*s%-*s%-*s%-*s%-*s%-*s%-*s%-*s",
+		colMarker, "",
+		name, "节点",
+		colGap, "",
+		colDelay, "延迟",
+		colGap, "",
+		bar, "速度柱",
+		colGap, "",
+		colType, "类型",
+	)
+}
 
 // ─── Proxy List Item ──────────────────────────────────────────
 
-func (m Model) renderProxyItem(node string, isNow bool, isSelected bool, maxDelay int, nodeType string) string {
+func (m Model) renderProxyItem(node string, isNow bool, isSelected bool, maxDelay int, nodeType string, colName, colBar int) string {
 	// Marker column (centered)
 	marker := "  ○ "
 	if isNow {
@@ -198,17 +216,17 @@ func (m Model) renderProxyItem(node string, isNow bool, isSelected bool, maxDela
 	}
 
 	// Name column (left-aligned, truncated)
-	name := fmt.Sprintf("%-*s", colName, Truncate(node, colName))
+	name := PadRight(Truncate(node, colName), colName)
 
 	// Latency column (right-aligned)
-	latStr := fmt.Sprintf("%*s", colDelay, "···")
+	latStr := PadLeft("···", colDelay)
 	if d, ok := m.delayResults[node]; ok && d > 0 {
 		latStr = lipgloss.NewStyle().Foreground(LatencyColor(d)).Bold(true).
-			Render(fmt.Sprintf("%*dms", colDelay-2, d))
+			Render(PadLeft(fmt.Sprintf("%dms", d), colDelay))
 	}
 
 	// Bar column
-	bar := fmt.Sprintf("%-*s", colBar, LatencyBar(m.delayResults[node], maxDelay, colBar-2))
+	bar := PadRight(LatencyBar(m.delayResults[node], maxDelay, colBar-2), colBar)
 
 	// Type badge column (left-aligned, fixed width)
 	badge := strings.Repeat(" ", colType)
@@ -322,7 +340,8 @@ func (m Model) renderProxiesTab() string {
 		}
 
 		// Column header
-		b.WriteString(MutedStyle.Render(proxyHeaderLine))
+		colName, colBar := m.proxyColWidths()
+		b.WriteString(MutedStyle.Render(proxyHeaderLine(colName, colBar)))
 		b.WriteString("\n")
 		b.WriteString(DividerStyle.Render(strings.Repeat("─", panelW-6)))
 		b.WriteString("\n")
@@ -339,7 +358,7 @@ func (m Model) renderProxiesTab() string {
 			isNow := node == group.Now
 			isSelected := ni == m.nodeIdx
 
-			line := m.renderProxyItem(node, isNow, isSelected, maxDelay, nodeType)
+			line := m.renderProxyItem(node, isNow, isSelected, maxDelay, nodeType, colName, colBar)
 			b.WriteString(line)
 			b.WriteString("\n")
 			visibleCount++
