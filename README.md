@@ -4,27 +4,52 @@ Linux 命令行代理管理工具，对标 Clash Verge 的全部功能。基于 
 
 ## 安装
 
-### 开盒即用：一条命令搞定
-
-mihomo-cli 将 mihomo 内核直接嵌入到二进制中，**无需额外下载或配置**。首次运行时自动解压部署。
+### 一键安装
 
 ```bash
 git clone <repo-url> && cd mihomo-cli
 make build
-sudo cp mihomo-cli /usr/local/bin/
-mihomo-cli
+sudo make install
 ```
 
-首次运行输出示例：
-```
-Extracting embedded mihomo kernel...
-Kernel ready: /home/ubuntu/.config/mihomo-cli/mihomo
-Starting mihomo...
+安装完成后，`mihomo-cli` 在任何目录都可以使用。
+
+```bash
+mihomo-cli                 # 进入 TUI 界面
+mihomo-cli --help          # 查看所有命令
 ```
 
-之后直接 `mihomo-cli` 进入 TUI 界面。
+### 一键卸载
 
-**在 Windows/macOS 上交叉编译：**
+```bash
+sudo make uninstall
+```
+
+这会停止服务、删除二进制和守护进程数据。用户配置（`~/.config/mihomo-cli/`）会被保留。
+
+### Shell 自动补全
+
+```bash
+# 一键安装所有 Shell 的补全
+sudo make install-completions
+
+# 或手动安装指定 Shell
+source <(mihomo-cli completion bash)     # 临时生效
+mihomo-cli completion bash | sudo tee /etc/bash_completion.d/mihomo-cli   # 永久生效
+```
+
+支持的 Shell：`bash`、`zsh`、`fish`、`powershell`
+
+### systemd 服务（开机自启）
+
+```bash
+sudo cp mihomo-cli.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now mihomo-cli
+sudo systemctl status mihomo-cli
+```
+
+### 交叉编译
 
 ```bash
 # Windows PowerShell
@@ -34,38 +59,7 @@ $env:GOOS="linux"; $env:GOARCH="amd64"; go build -ldflags="-s -w" -o mihomo-cli 
 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o mihomo-cli ./cmd/mihomo-cli/
 ```
 
-> **注意**：交叉编译前需要先下载内核文件：`make download-kernel`（或手动放到 `internal/kernel/embedded/mihomo-linux-amd64.gz`）
->
-> 在 Windows 上编译默认生成 `.exe`（PE 格式），Linux 无法执行。必须用上面的交叉编译命令。
-
-### 安装到 PATH
-
-```bash
-sudo cp mihomo-cli /usr/local/bin/
-```
-
-现在可以在任何目录使用：
-
-```bash
-mihomo-cli --help
-```
-
-### 验证安装
-
-```bash
-which mihomo-cli        # /usr/local/bin/mihomo-cli
-mihomo-cli --help       # 打印命令列表
-```
-
-### 内核管理（高级）
-
-正常情况下不需要关心内核，mihomo-cli 自动管理。以下命令用于特殊场景（使用自定义内核、更换版本等）：
-
-```bash
-mihomo-cli kernel path                           # 查看内核安装路径
-mihomo-cli kernel install --local ./mihomo       # 使用本地内核替换
-mihomo-cli kernel install --url <镜像地址>        # 从镜像下载替换
-```
+> 交叉编译前需要先下载内核文件：`make download-kernel`（或手动放到 `internal/kernel/embedded/mihomo-linux-amd64.gz`）
 
 ### 依赖
 
@@ -332,7 +326,7 @@ mihomo-cli conn list
 
 ```bash
 mihomo-cli service logs           # 最近的日志
-sudo tail -f /root/.config/mihomo-cli/mihomo/logs/mihomo.log  # 实时追踪
+sudo tail -f /var/lib/mihomo-cli/logs/mihomo.log  # 实时追踪
 ```
 
 ### 检查服务状态
@@ -406,12 +400,17 @@ user_rules: []           # 自定义规则
 ### 目录结构
 
 ```
-~/.config/mihomo-cli/
-├── config.yaml          # 应用配置
-├── profiles/            # 订阅缓存
-│   └── my-sub.yaml      # 每个订阅的节点数据
-└── mihomo/              # mihomo 内核工作目录
-    └── config.yaml      # 自动生成的 mihomo 配置
+~/.config/mihomo-cli/          # 用户配置
+├── config.yaml                # 应用配置（订阅、模式、端口）
+└── profiles/                  # 订阅缓存
+    └── my-sub.yaml            # 每个订阅的节点数据
+
+/var/lib/mihomo-cli/           # 守护进程数据（sudo 和普通用户共用）
+├── bin/mihomo                 # mihomo 内核二进制
+├── config.yaml                # 自动生成的 mihomo 配置
+├── mihomo.pid                 # 进程 PID
+└── logs/
+    └── mihomo.log             # 运行日志
 ```
 
 ## 环境变量
@@ -473,7 +472,7 @@ alias proxy-global='mihomo-cli mode set global'
 
 ## 注意事项
 
-- mihomo 内核已嵌入二进制，首次运行自动解压到 `~/.config/mihomo-cli/mihomo`，无需手动安装
+- mihomo 内核已嵌入二进制，首次运行自动解压到 `/var/lib/mihomo-cli/bin/mihomo`，无需手动安装
 - 非 Linux/amd64 平台不支持嵌入内核，需手动安装：`mihomo-cli kernel install --local <path>`
 - 系统代理设置仅支持 GNOME 桌面环境（通过 gsettings）
 - mihomo 内核以子进程方式运行，退出 mihomo-cli 后内核继续运行。如需停止请使用 `mihomo-cli service stop`

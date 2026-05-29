@@ -1,0 +1,16 @@
+[Unit]
+Description=mihomo proxy daemon
+Documentation=https://github.com/MetaCubeX/mihomo
+After=network.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/local/bin/mihomo-cli service prepare
+ExecStart=/var/lib/mihomo-cli/bin/mihomo -d /var/lib/mihomo-cli
+ExecReload=/usr/local/bin/mihomo-cli config reload
+ExecStop=/usr/local/bin/mihomo-cli service stop
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

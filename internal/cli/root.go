@@ -98,6 +98,45 @@ func ensureMihomo() (*api.Client, error) {
 	return ac, nil
 }
 
+func init() {
+	rootCmd.AddCommand(completionCmd)
+}
+
+var completionCmd = &cobra.Command{
+	Use:   "completion [bash|zsh|fish|powershell]",
+	Short: "生成 Shell 自动补全脚本",
+	Long: `生成指定 Shell 的自动补全脚本，安装后可以用 Tab 补全命令和参数。
+
+Bash:
+  source <(mihomo-cli completion bash)
+  永久安装:
+  mihomo-cli completion bash | sudo tee /etc/bash_completion.d/mihomo-cli
+
+Zsh:
+  source <(mihomo-cli completion zsh)
+  永久安装:
+  mihomo-cli completion zsh | sudo tee /usr/local/share/zsh/site-functions/_mihomo-cli
+
+Fish:
+  mihomo-cli completion fish | source
+  永久安装:
+  mihomo-cli completion fish | sudo tee /usr/local/share/fish/completions/mihomo-cli.fish`,
+	ValidArgs: []string{"bash", "zsh", "fish", "powershell"},
+	Args:      cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
+	Run: func(cmd *cobra.Command, args []string) {
+		switch args[0] {
+		case "bash":
+			rootCmd.GenBashCompletion(os.Stdout)
+		case "zsh":
+			rootCmd.GenZshCompletion(os.Stdout)
+		case "fish":
+			rootCmd.GenFishCompletion(os.Stdout, true)
+		case "powershell":
+			rootCmd.GenPowerShellCompletion(os.Stdout)
+		}
+	},
+}
+
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

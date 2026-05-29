@@ -104,11 +104,33 @@ var serviceLogsCmd = &cobra.Command{
 	},
 }
 
+var servicePrepareCmd = &cobra.Command{
+	Use:   "prepare",
+	Short: "Prepare kernel and config for systemd (used as ExecStartPre)",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if kernelMgr == nil {
+			return fmt.Errorf("kernel manager not initialized")
+		}
+		if !kernelMgr.IsInstalled() {
+			if err := kernelMgr.ExtractEmbedded(kernelMgr.BinPath()); err != nil {
+				return fmt.Errorf("kernel not installed: %w", err)
+			}
+		}
+		if subMgr != nil {
+			if err := subMgr.MergeAndGenerate(); err != nil {
+				return fmt.Errorf("generate config: %w", err)
+			}
+		}
+		return nil
+	},
+}
+
 func init() {
 	serviceCmd.AddCommand(serviceStartCmd)
 	serviceCmd.AddCommand(serviceStopCmd)
 	serviceCmd.AddCommand(serviceRestartCmd)
 	serviceCmd.AddCommand(serviceStatusCmd)
 	serviceCmd.AddCommand(serviceLogsCmd)
+	serviceCmd.AddCommand(servicePrepareCmd)
 	rootCmd.AddCommand(serviceCmd)
 }
