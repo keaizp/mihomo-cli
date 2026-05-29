@@ -163,39 +163,78 @@ func (m Model) renderFooter() string {
 	return lipgloss.JoinVertical(lipgloss.Left, divider, FooterStyle.Width(m.width-2).Render(keyBar))
 }
 
+// ─── Column Layout Constants ──────────────────────────────────
+//
+//	┌ marker ┐  ┌── name (L) ──┐  ┌ delay (R) ┐  ┌── bar ──┐  ┌ type (L) ┐
+//	  ●         香港 01                   12ms  ████······      ss
+const (
+	colMarker = 4  // "  ● " — marker centered
+	colName   = 26 // left-aligned
+	colDelay  = 6  // right-aligned, e.g. "  12ms"
+	colBar    = 10 // latency bar
+	colType   = 8  // left-aligned type badge
+	colGap    = 2  // gap between columns
+)
+
+var proxyHeaderLine = fmt.Sprintf(
+	"%-*s%-*s%-*s%-*s%-*s%-*s%-*s%-*s",
+	colMarker, "",
+	colName, "节点",
+	colGap, "",
+	colDelay, "延迟",
+	colGap, "",
+	colBar, "速度柱",
+	colGap, "",
+	colType, "类型",
+)
+
 // ─── Proxy List Item ──────────────────────────────────────────
 
 func (m Model) renderProxyItem(node string, isNow bool, isSelected bool, maxDelay int, nodeType string) string {
-	marker := "○"
+	// Marker column (centered)
+	marker := "  ○ "
 	if isNow {
-		marker = lipgloss.NewStyle().Foreground(lipgloss.Color(colorSuccess)).Bold(true).Render("●")
-	} else {
-		marker = MutedStyle.Render("○")
+		marker = "  " + lipgloss.NewStyle().Foreground(lipgloss.Color(colorSuccess)).Bold(true).Render("●") + " "
 	}
 
-	// Latency
-	latStr := "  ···"
+	// Name column (left-aligned, truncated)
+	name := fmt.Sprintf("%-*s", colName, Truncate(node, colName))
+
+	// Latency column (right-aligned)
+	latStr := fmt.Sprintf("%*s", colDelay, "···")
 	if d, ok := m.delayResults[node]; ok && d > 0 {
-		latStr = lipgloss.NewStyle().Foreground(LatencyColor(d)).Bold(true).Render(fmt.Sprintf("%4dms", d))
+		latStr = lipgloss.NewStyle().Foreground(LatencyColor(d)).Bold(true).
+			Render(fmt.Sprintf("%*dms", colDelay-2, d))
 	}
 
-	// Bar
-	bar := LatencyBar(m.delayResults[node], maxDelay, 6)
+	// Bar column
+	bar := fmt.Sprintf("%-*s", colBar, LatencyBar(m.delayResults[node], maxDelay, colBar-2))
 
-	// Type badge
-	badge := ""
+	// Type badge column (left-aligned, fixed width)
+	badge := strings.Repeat(" ", colType)
 	if nodeType != "" {
-		badge = " " + lipgloss.NewStyle().
+		displayType := Truncate(nodeType, colType-2)
+		styled := lipgloss.NewStyle().
 			Foreground(lipgloss.Color(colorTextDim)).
 			Background(lipgloss.Color(colorBgLight)).
 			Padding(0, 1).
-			Render(nodeType)
+			Render(displayType)
+		w := lipgloss.Width(styled)
+		if w < colType {
+			styled += strings.Repeat(" ", colType-w)
+		}
+		badge = styled
 	}
 
-	// Node name (truncate if too long)
-	name := Truncate(node, 24)
-
-	line := fmt.Sprintf("  %s  %-24s %s  %s%s", marker, name, latStr, bar, badge)
+	// Build column line
+	line := marker +
+		name +
+		strings.Repeat(" ", colGap) +
+		latStr +
+		strings.Repeat(" ", colGap) +
+		bar +
+		strings.Repeat(" ", colGap) +
+		badge
 
 	if isSelected {
 		return SelectedStyle.Padding(0, 1).Render(line)
@@ -281,6 +320,12 @@ func (m Model) renderProxiesTab() string {
 		if maxDelay < 50 {
 			maxDelay = 500
 		}
+
+		// Column header
+		b.WriteString(MutedStyle.Render(proxyHeaderLine))
+		b.WriteString("\n")
+		b.WriteString(DividerStyle.Render(strings.Repeat("─", panelW-6)))
+		b.WriteString("\n")
 
 		// Render each node
 		visibleCount := 0
