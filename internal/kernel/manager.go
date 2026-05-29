@@ -240,26 +240,21 @@ func (m *Manager) Start() error {
 	}
 
 	logDir := filepath.Join(m.workDir, "logs")
-	os.MkdirAll(logDir, 0755)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("create log dir: %w", err)
+	}
 	logFile, err := os.Create(filepath.Join(logDir, "mihomo.log"))
 	if err != nil {
-		logFile = nil
+		return fmt.Errorf("create log file: %w", err)
 	}
 
 	configPath := filepath.Join(m.workDir, "config.yaml")
 	m.cmd = exec.Command(m.binPath, "-d", m.workDir, "-f", configPath)
-	if logFile != nil {
-		m.cmd.Stdout = logFile
-		m.cmd.Stderr = logFile
-	} else {
-		m.cmd.Stdout = os.Stderr
-		m.cmd.Stderr = os.Stderr
-	}
+	m.cmd.Stdout = logFile
+	m.cmd.Stderr = logFile
 
 	if err := m.cmd.Start(); err != nil {
-		if logFile != nil {
-			logFile.Close()
-		}
+		logFile.Close()
 		m.cmd = nil
 		return fmt.Errorf("start mihomo: %w", err)
 	}
