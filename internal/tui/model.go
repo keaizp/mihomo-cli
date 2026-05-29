@@ -184,7 +184,7 @@ var Keys = KeyMap{
 	TabPrev:   key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("S-Tab", "上一组")),
 	TabNext:   key.NewBinding(key.WithKeys("tab"), key.WithHelp("Tab", "下一组")),
 	Test:      key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "测速")),
-	TestAll:   key.NewBinding(key.WithKeys("T"), key.WithHelp("T", "全组测速")),
+	TestAll:   key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "全组测速")),
 	Quit:      key.NewBinding(key.WithKeys("q", "ctrl+c", "esc"), key.WithHelp("q", "退出")),
 	Reload:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "重载配置")),
 	Update:    key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "更新订阅")),

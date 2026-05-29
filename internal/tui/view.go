@@ -139,7 +139,7 @@ func (m Model) renderFooter() string {
 	var keys []string
 	switch m.tabIdx {
 	case 0: // 代理
-		keys = append(keys, "↑↓ 导航", "Enter 切换", "Tab 换组", "t 测速", "T 全组测速", "/ 搜索", "空格 折叠")
+		keys = append(keys, "↑↓ 导航", "Enter 切换", "Tab 换组", "t 测速", "a 全组测速", "/ 搜索", "空格 折叠")
 	case 1: // 连接
 		keys = append(keys, "↑↓ 导航", "d 关闭连接", "X 关闭全部")
 	case 2: // 日志
