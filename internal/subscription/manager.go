@@ -126,6 +126,10 @@ func (m *Manager) MergeAndGenerate() error {
 
 	profilesDir := filepath.Join(m.cfg.ConfigDir(), "profiles")
 	for _, sub := range appCfg.Subscriptions {
+		// If an active subscription is set, only merge that one.
+		if appCfg.ActiveSubscription != "" && sub.Name != appCfg.ActiveSubscription {
+			continue
+		}
 		profilePath := filepath.Join(profilesDir, sub.Name+".yaml")
 		data, err := os.ReadFile(profilePath)
 		if err != nil {
