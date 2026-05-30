@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,9 +40,13 @@ func (m *Manager) Fetch(subURL string) (*SubscriptionConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("User-Agent", "clash-verge/1.0")
+	req.Header.Set("User-Agent", "clash")
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Cache-Control", "no-cache")
+	// Some CDN/WAF providers require a Referer from the same domain.
+	if u, err := url.Parse(subURL); err == nil {
+		req.Header.Set("Referer", u.Scheme+"://"+u.Host+"/")
+	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
