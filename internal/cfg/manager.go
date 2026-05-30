@@ -10,8 +10,9 @@ import (
 
 // AppConfig is the top-level mihomo-cli configuration.
 type AppConfig struct {
-	Core          CoreConfig       `yaml:"core"`
-	Subscriptions []Subscription   `yaml:"subscriptions"`
+	Core               CoreConfig       `yaml:"core"`
+	ActiveSubscription string           `yaml:"active_subscription"`
+	Subscriptions      []Subscription   `yaml:"subscriptions"`
 	Mode          string           `yaml:"mode"` // rule, global, direct, script
 	UserRules     []string         `yaml:"user_rules"`
 	UserProxies   []map[string]any `yaml:"user_proxies"`
@@ -137,6 +138,36 @@ func (m *Manager) RemoveSubscription(name string) error {
 		return fmt.Errorf("subscription %q not found", name)
 	}
 	m.config.Subscriptions = append(m.config.Subscriptions[:idx], m.config.Subscriptions[idx+1:]...)
+	return m.Save()
+}
+
+// UpdateSubscription updates a subscription's URL by name.
+func (m *Manager) UpdateSubscription(name, url string) error {
+	for i, s := range m.config.Subscriptions {
+		if s.Name == name {
+			m.config.Subscriptions[i].URL = url
+			return m.Save()
+		}
+	}
+	return fmt.Errorf("subscription %q not found", name)
+}
+
+// SetActiveSubscription sets the active subscription and saves.
+// Pass empty string to use all subscriptions.
+func (m *Manager) SetActiveSubscription(name string) error {
+	if name != "" {
+		found := false
+		for _, s := range m.config.Subscriptions {
+			if s.Name == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("subscription %q not found", name)
+		}
+	}
+	m.config.ActiveSubscription = name
 	return m.Save()
 }
 
