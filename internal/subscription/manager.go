@@ -57,39 +57,62 @@ func (m *Manager) Fetch(subURL string) (*SubscriptionConfig, error) {
 		return nil, fmt.Errorf("read body: %w", err)
 	}
 
-	decoded := decodeSubscriptionBody(body)
-
-	// Try parsing as structured Clash YAML first.
-	var subCfg SubscriptionConfig
-	if err := yaml.Unmarshal(decoded, &subCfg); err == nil && len(subCfg.Proxies) > 0 {
-		return &subCfg, nil
+	// Try raw body first (many servers return plain YAML / URI list).
+	if subCfg, ok := parseSubscription(body); ok {
+		return subCfg, nil
 	}
 
-	// Fallback: proxies may be a flat list of URI strings (e.g. ss://..., vmess://...).
-	// Try "proxies" → []string first, then bare []string.
+	// If raw body wasn't valid, try base64 decoding (classic Clash subscription format).
+	if decoded := decodeSubscriptionBody(body); decoded != nil {
+		if subCfg, ok := parseSubscription(decoded); ok {
+			return subCfg, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no proxies found in subscription (body starts with: %.80s)", string(body))
+}
+
+// parseSubscription tries to parse a byte slice as a subscription config.
+func parseSubscription(data []byte) (*SubscriptionConfig, bool) {
+	var subCfg SubscriptionConfig
+
+	// Try structured Clash YAML: proxies as list of maps.
+	if err := yaml.Unmarshal(data, &subCfg); err == nil && len(subCfg.Proxies) > 0 {
+		return &subCfg, true
+	}
+
+	// Try "proxies" as list of URI strings (ss://..., vmess://...).
 	var wrapper struct {
 		Proxies []string `yaml:"proxies"`
 	}
-	if err := yaml.Unmarshal(decoded, &wrapper); err == nil && len(wrapper.Proxies) > 0 {
+	if err := yaml.Unmarshal(data, &wrapper); err == nil && len(wrapper.Proxies) > 0 {
 		for _, uri := range wrapper.Proxies {
 			subCfg.Proxies = append(subCfg.Proxies, map[string]any{"__uri__": uri})
 		}
-	} else {
-		var proxiesRaw []string
-		if err := yaml.Unmarshal(decoded, &proxiesRaw); err != nil || len(proxiesRaw) == 0 {
-			return nil, fmt.Errorf("no proxies found in subscription (tried structured YAML and URI list)")
-		}
+		return &subCfg, true
+	}
+
+	// Try bare list of URI strings.
+	var proxiesRaw []string
+	if err := yaml.Unmarshal(data, &proxiesRaw); err == nil && len(proxiesRaw) > 0 {
 		for _, uri := range proxiesRaw {
 			subCfg.Proxies = append(subCfg.Proxies, map[string]any{"__uri__": uri})
 		}
+		return &subCfg, true
 	}
 
-	return &subCfg, nil
+	return nil, false
 }
 
-// decodeSubscriptionBody tries multiple base64 encodings, falling back to raw body.
+// decodeSubscriptionBody tries multiple base64 encodings.
+// Returns nil if the body doesn't look like base64 at all.
 func decodeSubscriptionBody(body []byte) []byte {
 	raw := strings.TrimSpace(string(body))
+
+	// Skip empty or obviously-not-base64 bodies.
+	if len(raw) == 0 || raw[0] == '{' || raw[0] == '-' {
+		return nil
+	}
 
 	encodings := []*base64.Encoding{
 		base64.StdEncoding,
@@ -98,12 +121,20 @@ func decodeSubscriptionBody(body []byte) []byte {
 		base64.RawURLEncoding,
 	}
 	for _, enc := range encodings {
-		if decoded, err := enc.DecodeString(raw); err == nil {
+		if decoded, err := enc.DecodeString(raw); err == nil && looksLikeSubscription(decoded) {
 			return decoded
 		}
 	}
-	// Not base64 — return as-is (raw YAML).
-	return body
+	return nil
+}
+
+// looksLikeSubscription checks if data appears to be a subscription config.
+func looksLikeSubscription(data []byte) bool {
+	s := strings.TrimSpace(string(data))
+	return strings.Contains(s, "proxies") ||
+		strings.Contains(s, "ss://") ||
+		strings.Contains(s, "vmess://") ||
+		strings.Contains(s, "trojan://")
 }
 
 // UpdateSubscription fetches a subscription by name, saves its profile, and
