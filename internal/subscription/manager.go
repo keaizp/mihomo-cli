@@ -63,9 +63,8 @@ func (m *Manager) fetch(subURL string, transport *http.Transport) (*Subscription
 
 	// Set Basic Auth from the original URL (url package auto-decodes percent-encoding).
 	if u, err := url.Parse(subURL); err == nil && u.User != nil {
-		if pass, ok := u.User.Password(); ok {
-			req.SetBasicAuth(u.User.Username(), pass)
-		}
+		pass, _ := u.User.Password()
+		req.SetBasicAuth(u.User.Username(), pass)
 	}
 
 	if transport == nil {
@@ -212,24 +211,28 @@ func (m *Manager) fetchWithFallback(subURL string, mixedPort int) (*Subscription
 	if err == nil {
 		return subCfg, nil
 	}
-	firstErr := err
+	fmt.Fprintf(os.Stderr, "[订阅] 直连失败: %v\n", err)
 
 	// Tier 2: Through Clash localhost proxy (self_proxy).
 	clashProxy := fmt.Sprintf("http://127.0.0.1:%d", mixedPort)
 	if pu, err2 := url.Parse(clashProxy); err2 == nil {
 		subCfg, err = m.fetch(subURL, &http.Transport{Proxy: http.ProxyURL(pu)})
 		if err == nil {
+			fmt.Fprintf(os.Stderr, "[订阅] Clash代理(127.0.0.1:%d) 成功\n", mixedPort)
 			return subCfg, nil
 		}
+		fmt.Fprintf(os.Stderr, "[订阅] Clash代理(127.0.0.1:%d) 失败: %v\n", mixedPort, err)
 	}
 
 	// Tier 3: Through system proxy (with_proxy, via environment variables).
 	subCfg, err = m.fetch(subURL, &http.Transport{Proxy: http.ProxyFromEnvironment})
 	if err == nil {
+		fmt.Fprintf(os.Stderr, "[订阅] 系统代理 成功\n")
 		return subCfg, nil
 	}
+	fmt.Fprintf(os.Stderr, "[订阅] 系统代理 失败: %v\n", err)
 
-	return nil, fmt.Errorf("all methods failed; direct: %w", firstErr)
+	return nil, fmt.Errorf("all methods failed")
 }
 
 // UpdateAll updates all subscriptions.
