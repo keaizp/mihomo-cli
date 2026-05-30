@@ -545,9 +545,19 @@ func (m Model) renderSubsTab() string {
 	}
 
 	subs := m.cfgMgr.Config().Subscriptions
+	activeSub := m.cfgMgr.Config().ActiveSubscription
+
+	// Active hint
+	activeHint := "全部"
+	if activeSub != "" {
+		activeHint = activeSub
+	}
+	b.WriteString(MutedStyle.Render(fmt.Sprintf("  当前激活: %s", BoldStyle.Render(activeHint))))
+	b.WriteString("\n\n")
+
 	if len(subs) == 0 {
 		empty := MutedStyle.Render("暂无订阅") + "\n\n" +
-			HelpKeyStyle.Render("a") + " 添加订阅  " +
+			HelpKeyStyle.Render("n") + " 添加订阅  " +
 			HelpKeyStyle.Render("u") + " 更新全部"
 		return PanelStyle.Width(panelW - 2).Render(empty)
 	}
@@ -559,16 +569,20 @@ func (m Model) renderSubsTab() string {
 	b.WriteString("\n")
 
 	for i, s := range subs {
-		status := StatusRunningStyle.Render("●")
+		// Active marker: green ● for active, ○ for inactive
+		status := StatusStoppedStyle.Render("○")
+		if s.Name == activeSub {
+			status = StatusRunningStyle.Render("●")
+		}
+
 		urlDisplay := Truncate(s.URL, 38)
-		interval := fmt.Sprintf("%dh", s.Interval/3600)
 		updated := "从未"
 		if s.LastUpdated > 0 {
 			updated = FormatDuration(time.Now().Unix() - s.LastUpdated) + "前"
 		}
 
-		line := fmt.Sprintf("  %s   %-16s  %-40s  %-8s  %s",
-			status, s.Name, urlDisplay, interval, MutedStyle.Render(updated))
+		line := fmt.Sprintf("  %s   %-16s  %-40s  %s",
+			status, s.Name, urlDisplay, MutedStyle.Render(updated))
 
 		if i == m.subIdx {
 			b.WriteString(SelectedStyle.Padding(0, 1).Render(line))
