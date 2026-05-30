@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -15,6 +16,7 @@ import (
 )
 
 // SubscriptionConfig represents a parsed Clash subscription config.
+// Proxies can be either structured maps (Clash YAML) or URI strings (stored with __uri__ key).
 type SubscriptionConfig struct {
 	Proxies     []map[string]any `yaml:"proxies"`
 	ProxyGroups []map[string]any `yaml:"proxy-groups"`
@@ -33,8 +35,14 @@ func NewManager(cfgMgr *cfg.Manager) *Manager {
 
 // Fetch downloads and decodes a subscription from the given URL.
 func (m *Manager) Fetch(subURL string) (*SubscriptionConfig, error) {
+	req, err := http.NewRequest("GET", subURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("User-Agent", "clash-verge/1.0")
+
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(subURL)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch subscription: %w", err)
 	}
@@ -49,19 +57,53 @@ func (m *Manager) Fetch(subURL string) (*SubscriptionConfig, error) {
 		return nil, fmt.Errorf("read body: %w", err)
 	}
 
-	// Try base64 decode first (standard Clash subscription format)
-	decoded, err := base64.StdEncoding.DecodeString(string(body))
-	if err != nil {
-		// Not base64, try raw YAML
-		decoded = body
+	decoded := decodeSubscriptionBody(body)
+
+	// Try parsing as structured Clash YAML first.
+	var subCfg SubscriptionConfig
+	if err := yaml.Unmarshal(decoded, &subCfg); err == nil && len(subCfg.Proxies) > 0 {
+		return &subCfg, nil
 	}
 
-	var subCfg SubscriptionConfig
-	if err := yaml.Unmarshal(decoded, &subCfg); err != nil {
-		return nil, fmt.Errorf("parse subscription YAML: %w", err)
+	// Fallback: proxies may be a flat list of URI strings (e.g. ss://..., vmess://...).
+	// Try "proxies" → []string first, then bare []string.
+	var wrapper struct {
+		Proxies []string `yaml:"proxies"`
+	}
+	if err := yaml.Unmarshal(decoded, &wrapper); err == nil && len(wrapper.Proxies) > 0 {
+		for _, uri := range wrapper.Proxies {
+			subCfg.Proxies = append(subCfg.Proxies, map[string]any{"__uri__": uri})
+		}
+	} else {
+		var proxiesRaw []string
+		if err := yaml.Unmarshal(decoded, &proxiesRaw); err != nil || len(proxiesRaw) == 0 {
+			return nil, fmt.Errorf("no proxies found in subscription (tried structured YAML and URI list)")
+		}
+		for _, uri := range proxiesRaw {
+			subCfg.Proxies = append(subCfg.Proxies, map[string]any{"__uri__": uri})
+		}
 	}
 
 	return &subCfg, nil
+}
+
+// decodeSubscriptionBody tries multiple base64 encodings, falling back to raw body.
+func decodeSubscriptionBody(body []byte) []byte {
+	raw := strings.TrimSpace(string(body))
+
+	encodings := []*base64.Encoding{
+		base64.StdEncoding,
+		base64.RawStdEncoding,
+		base64.URLEncoding,
+		base64.RawURLEncoding,
+	}
+	for _, enc := range encodings {
+		if decoded, err := enc.DecodeString(raw); err == nil {
+			return decoded
+		}
+	}
+	// Not base64 — return as-is (raw YAML).
+	return body
 }
 
 // UpdateSubscription fetches a subscription by name, saves its profile, and
@@ -122,7 +164,7 @@ func (m *Manager) UpdateAll() []error {
 // writes the final mihomo config file.
 func (m *Manager) MergeAndGenerate() error {
 	appCfg := m.cfg.Config()
-	allProxies := make([]map[string]any, 0)
+	allProxies := make([]any, 0) // []any to hold both maps and URI strings
 
 	profilesDir := filepath.Join(m.cfg.ConfigDir(), "profiles")
 	for _, sub := range appCfg.Subscriptions {
@@ -139,10 +181,19 @@ func (m *Manager) MergeAndGenerate() error {
 		if err := yaml.Unmarshal(data, &sc); err != nil {
 			continue
 		}
-		allProxies = append(allProxies, sc.Proxies...)
+		for _, p := range sc.Proxies {
+			if uri, ok := p["__uri__"].(string); ok {
+				// URI string proxy — pass through as raw string for mihomo to parse.
+				allProxies = append(allProxies, uri)
+			} else {
+				allProxies = append(allProxies, p)
+			}
+		}
 	}
 
-	allProxies = append(allProxies, appCfg.UserProxies...)
+	for _, p := range appCfg.UserProxies {
+		allProxies = append(allProxies, p)
+	}
 
 	mihomoCfg := map[string]any{
 		"port":                appCfg.Core.HTTPPort,
