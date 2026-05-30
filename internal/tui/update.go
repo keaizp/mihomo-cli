@@ -272,12 +272,54 @@ func (m Model) handleSubsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.subIdx++
 		}
 
+	case key.Matches(msg, Keys.Enter):
+		// Set selected subscription as active
+		if m.cfgMgr != nil && subCount > 0 {
+			subs := m.cfgMgr.Config().Subscriptions
+			if m.subIdx < len(subs) {
+				name := subs[m.subIdx].Name
+				cur := m.cfgMgr.Config().ActiveSubscription
+				if cur == name {
+					// Toggle off — use all subscriptions
+					m.cfgMgr.SetActiveSubscription("")
+					m.subMgr.MergeAndGenerate()
+					m.notification = "已切换为使用全部订阅"
+				} else {
+					m.cfgMgr.SetActiveSubscription(name)
+					m.subMgr.MergeAndGenerate()
+					m.notification = fmt.Sprintf("已切换激活订阅: %s", name)
+				}
+				if m.apiClient != nil {
+					m.apiClient.ReloadConfig()
+				}
+			}
+		}
+
+	case key.Matches(msg, Keys.SubAdd):
+		m.notification = "请使用命令行添加: mihomo-cli sub add <名称> <URL>"
+
+	case key.Matches(msg, Keys.SubEdit):
+		if m.cfgMgr != nil && subCount > 0 {
+			subs := m.cfgMgr.Config().Subscriptions
+			if m.subIdx < len(subs) {
+				m.notification = fmt.Sprintf("请使用命令行编辑: mihomo-cli sub edit %s <新URL>", subs[m.subIdx].Name)
+			}
+		}
+
 	case key.Matches(msg, Keys.SubDel):
 		if m.cfgMgr != nil && subCount > 0 {
 			subs := m.cfgMgr.Config().Subscriptions
 			if m.subIdx < len(subs) {
 				name := subs[m.subIdx].Name
 				m.cfgMgr.RemoveSubscription(name)
+				// If we removed the active sub, reset
+				if m.cfgMgr.Config().ActiveSubscription == name {
+					m.cfgMgr.SetActiveSubscription("")
+				}
+				m.subMgr.MergeAndGenerate()
+				if m.apiClient != nil {
+					m.apiClient.ReloadConfig()
+				}
 				m.notification = fmt.Sprintf("已删除订阅 %s", name)
 				if m.subIdx >= len(subs)-1 && m.subIdx > 0 {
 					m.subIdx--
@@ -286,9 +328,20 @@ func (m Model) handleSubsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case key.Matches(msg, Keys.Update):
-		if m.subMgr != nil {
-			m.subMgr.UpdateAll()
-			m.notification = "正在更新所有订阅..."
+		// Update single selected subscription
+		if m.subMgr != nil && subCount > 0 {
+			subs := m.cfgMgr.Config().Subscriptions
+			if m.subIdx < len(subs) {
+				name := subs[m.subIdx].Name
+				if err := m.subMgr.UpdateSubscription(name); err != nil {
+					m.notification = fmt.Sprintf("更新失败: %v", err)
+				} else {
+					m.notification = fmt.Sprintf("已更新订阅: %s", name)
+				}
+				if m.apiClient != nil {
+					m.apiClient.ReloadConfig()
+				}
+			}
 		}
 	}
 	return m, nil

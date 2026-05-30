@@ -147,7 +147,7 @@ func (m Model) renderFooter() string {
 	case 3: // 规则
 		keys = append(keys, "↑↓ 滚动")
 	case 4: // 订阅
-		keys = append(keys, "↑↓ 导航", "a 添加", "d 删除", "u 更新")
+		keys = append(keys, "↑↓ 导航", "Enter 切换激活", "n 添加", "e 编辑", "d 删除", "u 更新")
 	}
 	keys = append(keys, "1-5 视图", "m 模式", "r 重载", "q 退出")
 
