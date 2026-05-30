@@ -281,13 +281,22 @@ func (m Model) handleSubsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				cur := m.cfgMgr.Config().ActiveSubscription
 				if cur == name {
 					// Toggle off — use all subscriptions
-					m.cfgMgr.SetActiveSubscription("")
-					m.subMgr.MergeAndGenerate()
-					m.notification = "已切换为使用全部订阅"
+					if err := m.cfgMgr.SetActiveSubscription(""); err != nil {
+						m.notification = fmt.Sprintf("切换失败: %v", err)
+					} else if err := m.subMgr.MergeAndGenerate(); err != nil {
+						m.notification = fmt.Sprintf("生成配置失败: %v", err)
+					} else {
+						m.notification = "已切换为使用全部订阅"
+					}
 				} else {
-					m.cfgMgr.SetActiveSubscription(name)
-					m.subMgr.MergeAndGenerate()
-					m.notification = fmt.Sprintf("已切换激活订阅: %s", name)
+					// Set active first, then fetch + merge to ensure profile exists
+					if err := m.cfgMgr.SetActiveSubscription(name); err != nil {
+						m.notification = fmt.Sprintf("切换失败: %v", err)
+					} else if err := m.subMgr.UpdateSubscription(name); err != nil {
+						m.notification = fmt.Sprintf("获取订阅失败: %v", err)
+					} else {
+						m.notification = fmt.Sprintf("已切换激活订阅: %s", name)
+					}
 				}
 				if m.apiClient != nil {
 					m.apiClient.ReloadConfig()
@@ -311,18 +320,21 @@ func (m Model) handleSubsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			subs := m.cfgMgr.Config().Subscriptions
 			if m.subIdx < len(subs) {
 				name := subs[m.subIdx].Name
-				m.cfgMgr.RemoveSubscription(name)
-				// If we removed the active sub, reset
-				if m.cfgMgr.Config().ActiveSubscription == name {
-					m.cfgMgr.SetActiveSubscription("")
-				}
-				m.subMgr.MergeAndGenerate()
-				if m.apiClient != nil {
-					m.apiClient.ReloadConfig()
-				}
-				m.notification = fmt.Sprintf("已删除订阅 %s", name)
-				if m.subIdx >= len(subs)-1 && m.subIdx > 0 {
-					m.subIdx--
+				if err := m.cfgMgr.RemoveSubscription(name); err != nil {
+					m.notification = fmt.Sprintf("删除失败: %v", err)
+				} else {
+					// If we removed the active sub, reset
+					if m.cfgMgr.Config().ActiveSubscription == name {
+						m.cfgMgr.SetActiveSubscription("")
+					}
+					m.subMgr.MergeAndGenerate()
+					if m.apiClient != nil {
+						m.apiClient.ReloadConfig()
+					}
+					m.notification = fmt.Sprintf("已删除订阅 %s", name)
+					if m.subIdx >= len(subs)-1 && m.subIdx > 0 {
+						m.subIdx--
+					}
 				}
 			}
 		}

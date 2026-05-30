@@ -108,9 +108,13 @@ var subSwitchCmd = &cobra.Command{
 		if err := cfgMgr.SetActiveSubscription(name); err != nil {
 			return err
 		}
-		// Regenerate mihomo config and reload
+		// Fetch subscription data (if switching to a specific sub) and regenerate config
 		if subMgr != nil {
-			if err := subMgr.MergeAndGenerate(); err != nil {
+			if name != "" {
+				if err := subMgr.UpdateSubscription(name); err != nil {
+					return fmt.Errorf("获取订阅失败: %w", err)
+				}
+			} else if err := subMgr.MergeAndGenerate(); err != nil {
 				return fmt.Errorf("生成配置失败: %w", err)
 			}
 		}
