@@ -93,10 +93,61 @@ var subListCmd = &cobra.Command{
 	},
 }
 
+var subSwitchCmd = &cobra.Command{
+	Use:   "switch <名称>",
+	Short: "切换激活订阅（留空则使用全部）",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if cfgMgr == nil {
+			return fmt.Errorf("配置管理器未初始化")
+		}
+		name := ""
+		if len(args) > 0 {
+			name = args[0]
+		}
+		if err := cfgMgr.SetActiveSubscription(name); err != nil {
+			return err
+		}
+		if name == "" {
+			fmt.Println("✓ 已切换为使用全部订阅")
+		} else {
+			fmt.Printf("✓ 已切换激活订阅: %s\n", name)
+		}
+		// Regenerate mihomo config and reload
+		if subMgr != nil {
+			subMgr.MergeAndGenerate()
+		}
+		if kernelMgr != nil && kernelMgr.IsRunning() {
+			if ac := kernelMgr.APIClient(); ac != nil {
+				ac.ReloadConfig()
+			}
+		}
+		return nil
+	},
+}
+
+var subEditCmd = &cobra.Command{
+	Use:   "edit <名称> <新URL>",
+	Short: "编辑订阅 URL",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if cfgMgr == nil {
+			return fmt.Errorf("配置管理器未初始化")
+		}
+		if err := cfgMgr.UpdateSubscription(args[0], args[1]); err != nil {
+			return err
+		}
+		fmt.Printf("✓ 已更新订阅: %s\n", args[0])
+		return nil
+	},
+}
+
 func init() {
 	subCmd.AddCommand(subAddCmd)
 	subCmd.AddCommand(subRemoveCmd)
 	subCmd.AddCommand(subUpdateCmd)
 	subCmd.AddCommand(subListCmd)
+	subCmd.AddCommand(subSwitchCmd)
+	subCmd.AddCommand(subEditCmd)
 	rootCmd.AddCommand(subCmd)
 }
