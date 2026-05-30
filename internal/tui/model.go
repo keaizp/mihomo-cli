@@ -174,7 +174,6 @@ type KeyMap struct {
 	SubAdd    key.Binding
 	SubEdit   key.Binding
 	SubDel    key.Binding
-	SubToggle key.Binding
 }
 
 var Keys = KeyMap{
@@ -194,10 +193,9 @@ var Keys = KeyMap{
 	Close:     key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "关闭连接")),
 	CloseAll:  key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "关闭全部")),
 	LogLevel:  key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "日志级别")),
-	SubAdd:    key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "添加订阅")),
+	SubAdd:  key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "添加订阅")),
 	SubEdit:   key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "编辑订阅")),
 	SubDel:    key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "删除订阅")),
-	SubToggle: key.NewBinding(key.WithKeys("space"), key.WithHelp("空格", "启用/停用")),
 }
 
 func (k KeyMap) ShortHelp() []key.Binding {
