@@ -108,19 +108,23 @@ var subSwitchCmd = &cobra.Command{
 		if err := cfgMgr.SetActiveSubscription(name); err != nil {
 			return err
 		}
+		// Regenerate mihomo config and reload
+		if subMgr != nil {
+			if err := subMgr.MergeAndGenerate(); err != nil {
+				return fmt.Errorf("生成配置失败: %w", err)
+			}
+		}
+		if kernelMgr != nil && kernelMgr.IsRunning() {
+			if ac := kernelMgr.APIClient(); ac != nil {
+				if err := ac.ReloadConfig(); err != nil {
+					return fmt.Errorf("重载配置失败: %w", err)
+				}
+			}
+		}
 		if name == "" {
 			fmt.Println("✓ 已切换为使用全部订阅")
 		} else {
 			fmt.Printf("✓ 已切换激活订阅: %s\n", name)
-		}
-		// Regenerate mihomo config and reload
-		if subMgr != nil {
-			subMgr.MergeAndGenerate()
-		}
-		if kernelMgr != nil && kernelMgr.IsRunning() {
-			if ac := kernelMgr.APIClient(); ac != nil {
-				ac.ReloadConfig()
-			}
 		}
 		return nil
 	},
