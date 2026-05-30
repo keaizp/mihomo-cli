@@ -33,28 +33,45 @@ func NewManager(cfgMgr *cfg.Manager) *Manager {
 	return &Manager{cfg: cfgMgr}
 }
 
-// Fetch downloads and decodes a subscription from the given URL.
+// Fetch downloads and parses a subscription from the given URL using direct connection.
 // Follows Clash Verge Rev's approach: no base64 decode, plain YAML expected.
 func (m *Manager) Fetch(subURL string) (*SubscriptionConfig, error) {
+	return m.fetch(subURL, nil)
+}
+
+// fetch performs the actual HTTP fetch and YAML parsing. If transport is nil,
+// a direct-connection transport is used (no proxy).
+func (m *Manager) fetch(subURL string, transport *http.Transport) (*SubscriptionConfig, error) {
 	cleanURL, err := fixSubscriptionURL(subURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
 
-	req, err := http.NewRequest("GET", cleanURL, nil)
+	// Strip credentials from the request URL — they're sent via Basic Auth header instead.
+	// Matches Clash Verge Rev: network.rs get_with_tls_mode lines 193-206.
+	reqURL := cleanURL
+	if u, err := url.Parse(cleanURL); err == nil && u.User != nil {
+		u.User = nil
+		reqURL = u.String()
+	}
+
+	req, err := http.NewRequest("GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("User-Agent", "clash-verge/v1.0.0")
 
-	// Extract username:password from URL and set Basic Auth header (matching Clash Verge Rev).
+	// Set Basic Auth from the original URL (url package auto-decodes percent-encoding).
 	if u, err := url.Parse(subURL); err == nil && u.User != nil {
 		if pass, ok := u.User.Password(); ok {
 			req.SetBasicAuth(u.User.Username(), pass)
 		}
 	}
 
-	client := &http.Client{Timeout: 20 * time.Second}
+	if transport == nil {
+		transport = &http.Transport{Proxy: nil} // direct, no proxy
+	}
+	client := &http.Client{Timeout: 20 * time.Second, Transport: transport}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch subscription: %w", err)
@@ -71,7 +88,7 @@ func (m *Manager) Fetch(subURL string) (*SubscriptionConfig, error) {
 		return nil, fmt.Errorf("read body: %w", err)
 	}
 
-	// Strip UTF-8 BOM if present (matching Clash Verge Rev).
+	// Strip UTF-8 BOM if present (matching Clash Verge Rev: prfitem.rs line 385).
 	if len(body) >= 3 && body[0] == 0xEF && body[1] == 0xBB && body[2] == 0xBF {
 		body = body[3:]
 	}
@@ -86,7 +103,7 @@ func (m *Manager) Fetch(subURL string) (*SubscriptionConfig, error) {
 		return nil, fmt.Errorf("expected YAML mapping, got kind %d", root.Kind)
 	}
 
-	// Verify the response contains proxies or proxy-providers.
+	// Verify the response contains proxies or proxy-providers (prfitem.rs lines 388-392).
 	hasProxies := false
 	for i := 0; i < len(root.Content)-1; i += 2 {
 		key := root.Content[i]
@@ -122,6 +139,7 @@ func (m *Manager) Fetch(subURL string) (*SubscriptionConfig, error) {
 }
 
 // fixSubscriptionURL handles malformed URLs where query params appear after & instead of ?.
+// Matches Clash Verge Rev: prfitem.rs fix_dirty_url (lines 589-613).
 // Example: https://example.com/path&param1=value1 → https://example.com/path?param1=value1
 func fixSubscriptionURL(rawURL string) (string, error) {
 	u, err := url.Parse(rawURL)
@@ -139,8 +157,9 @@ func fixSubscriptionURL(rawURL string) (string, error) {
 	return u.String(), nil
 }
 
-// UpdateSubscription fetches a subscription by name, saves its profile, and
-// updates its timestamp.
+// UpdateSubscription fetches a subscription by name with three-tier proxy fallback,
+// saves its profile, and updates its timestamp.
+// Matches Clash Verge Rev: feat/profile.rs perform_profile_update (lines 100-187).
 func (m *Manager) UpdateSubscription(name string) error {
 	appCfg := m.cfg.Config()
 	var sub *cfg.Subscription
@@ -154,7 +173,11 @@ func (m *Manager) UpdateSubscription(name string) error {
 		return fmt.Errorf("subscription %q not found", name)
 	}
 
-	subCfg, err := m.Fetch(sub.URL)
+	// Three-tier proxy fallback matching Clash Verge Rev's perform_profile_update:
+	// 1. Direct connection (no proxy)
+	// 2. Through Clash localhost proxy (mixed port)
+	// 3. Through system proxy (environment variables)
+	subCfg, err := m.fetchWithFallback(sub.URL, appCfg.Core.MixedPort)
 	if err != nil {
 		return fmt.Errorf("fetch %q: %w", name, err)
 	}
@@ -179,6 +202,34 @@ func (m *Manager) UpdateSubscription(name string) error {
 	}
 
 	return m.MergeAndGenerate()
+}
+
+// fetchWithFallback tries three proxy methods in order, returning the first success.
+// Matches Clash Verge Rev's perform_profile_update three-tier fallback.
+func (m *Manager) fetchWithFallback(subURL string, mixedPort int) (*SubscriptionConfig, error) {
+	// Tier 1: Direct connection.
+	subCfg, err := m.fetch(subURL, nil)
+	if err == nil {
+		return subCfg, nil
+	}
+	firstErr := err
+
+	// Tier 2: Through Clash localhost proxy (self_proxy).
+	clashProxy := fmt.Sprintf("http://127.0.0.1:%d", mixedPort)
+	if pu, err2 := url.Parse(clashProxy); err2 == nil {
+		subCfg, err = m.fetch(subURL, &http.Transport{Proxy: http.ProxyURL(pu)})
+		if err == nil {
+			return subCfg, nil
+		}
+	}
+
+	// Tier 3: Through system proxy (with_proxy, via environment variables).
+	subCfg, err = m.fetch(subURL, &http.Transport{Proxy: http.ProxyFromEnvironment})
+	if err == nil {
+		return subCfg, nil
+	}
+
+	return nil, fmt.Errorf("all methods failed; direct: %w", firstErr)
 }
 
 // UpdateAll updates all subscriptions.
