@@ -95,7 +95,7 @@ var subListCmd = &cobra.Command{
 
 var subSwitchCmd = &cobra.Command{
 	Use:   "switch <名称>",
-	Short: "切换激活订阅（留空则使用全部）",
+	Short: "切换激活订阅（留空则取消激活）",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cfgMgr == nil {
@@ -126,7 +126,7 @@ var subSwitchCmd = &cobra.Command{
 			}
 		}
 		if name == "" {
-			fmt.Println("✓ 已切换为使用全部订阅")
+			fmt.Println("✓ 已取消激活订阅")
 		} else {
 			fmt.Printf("✓ 已切换激活订阅: %s\n", name)
 		}

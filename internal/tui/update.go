@@ -54,6 +54,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if ch >= '1' && ch <= '5' {
 				m.tabIdx = int(ch - '1')
 				m.nodeIdx = 0
+				m.proxyPage = 0
 				m.connIdx = 0
 				return m, m.fetchTabData()
 			}
@@ -145,6 +146,7 @@ func (m Model) handleProxiesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(m.groups) > 0 {
 			m.groupIdx = (m.groupIdx + 1) % len(m.groups)
 			m.nodeIdx = 0
+			m.proxyPage = 0
 		}
 
 	case key.Matches(msg, Keys.TabPrev):
@@ -154,6 +156,7 @@ func (m Model) handleProxiesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.groupIdx = len(m.groups) - 1
 			}
 			m.nodeIdx = 0
+			m.proxyPage = 0
 		}
 
 	case key.Matches(msg, Keys.Enter):
@@ -175,6 +178,16 @@ func (m Model) handleProxiesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			name := m.groups[m.groupIdx]
 			m.collapsed[name] = !m.collapsed[name]
 		}
+
+	case key.Matches(msg, Keys.PageUp):
+		if m.proxyPage > 0 {
+			m.proxyPage--
+			m.nodeIdx = 0
+		}
+
+	case key.Matches(msg, Keys.PageDown):
+		m.proxyPage++
+		m.nodeIdx = 0
 	}
 	return m, nil
 }
@@ -280,13 +293,13 @@ func (m Model) handleSubsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				name := subs[m.subIdx].Name
 				cur := m.cfgMgr.Config().ActiveSubscription
 				if cur == name {
-					// Toggle off — use all subscriptions
+					// Toggle off — deactivate, use no subscriptions
 					if err := m.cfgMgr.SetActiveSubscription(""); err != nil {
 						m.notification = fmt.Sprintf("切换失败: %v", err)
 					} else if err := m.subMgr.MergeAndGenerate(); err != nil {
 						m.notification = fmt.Sprintf("生成配置失败: %v", err)
 					} else {
-						m.notification = "已切换为使用全部订阅"
+						m.notification = "已取消激活订阅"
 					}
 				} else {
 					// Set active first, then fetch + merge to ensure profile exists

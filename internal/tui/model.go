@@ -64,6 +64,7 @@ type Model struct {
 	groups       []string
 	groupIdx     int
 	nodeIdx      int
+	proxyPage    int
 	delayResults map[string]int
 	collapsed    map[string]bool
 	speedtesting bool
@@ -174,6 +175,8 @@ type KeyMap struct {
 	SubAdd    key.Binding
 	SubEdit   key.Binding
 	SubDel    key.Binding
+	PageUp    key.Binding
+	PageDown  key.Binding
 }
 
 var Keys = KeyMap{
@@ -196,6 +199,8 @@ var Keys = KeyMap{
 	SubAdd:  key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "添加订阅")),
 	SubEdit:   key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "编辑订阅")),
 	SubDel:    key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "删除订阅")),
+	PageUp:    key.NewBinding(key.WithKeys("[", "pgup"), key.WithHelp("[/PgUp", "上页")),
+	PageDown:  key.NewBinding(key.WithKeys("]", "pgdown"), key.WithHelp("]/PgDn", "下页")),
 }
 
 func (k KeyMap) ShortHelp() []key.Binding {

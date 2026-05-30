@@ -139,7 +139,7 @@ func (m Model) renderFooter() string {
 	var keys []string
 	switch m.tabIdx {
 	case 0: // 代理
-		keys = append(keys, "↑↓ 导航", "Enter 切换", "Tab 换组", "t 测速", "a 全组测速", "/ 搜索", "空格 折叠")
+		keys = append(keys, "↑↓ 导航", "Enter 切换", "Tab 换组", "[ ] 翻页", "t 测速", "a 全组测速", "/ 搜索", "空格 折叠")
 	case 1: // 连接
 		keys = append(keys, "↑↓ 导航", "d 关闭连接", "X 关闭全部")
 	case 2: // 日志
@@ -346,9 +346,32 @@ func (m Model) renderProxiesTab() string {
 		b.WriteString(DividerStyle.Render(strings.Repeat("─", panelW-6)))
 		b.WriteString("\n")
 
-		// Render each node
+		// Pagination: calculate page size from terminal height
+		pageSize := m.height - 14
+		if pageSize < 8 {
+			pageSize = 8
+		}
+		totalPages := (len(nodes) + pageSize - 1) / pageSize
+		if totalPages == 0 {
+			totalPages = 1
+		}
+		page := m.proxyPage
+		if page >= totalPages {
+			page = totalPages - 1
+		}
+		if page < 0 {
+			page = 0
+		}
+		start := page * pageSize
+		end := start + pageSize
+		if end > len(nodes) {
+			end = len(nodes)
+		}
+		pageNodes := nodes[start:end]
+
+		// Render each node in current page
 		visibleCount := 0
-		for ni, node := range nodes {
+		for ni, node := range pageNodes {
 			// Determine node type from proxy info
 			nodeType := ""
 			if p, ok := m.proxies.Proxies[node]; ok {
@@ -369,9 +392,12 @@ func (m Model) renderProxiesTab() string {
 			b.WriteString("\n")
 		}
 
-		// Scroll hint if many nodes
-		if visibleCount > 15 && m.nodeIdx > 10 {
-			b.WriteString(ScrollHintStyle.Width(panelW - 4).Render(fmt.Sprintf("↑ %d/%d ↑", m.nodeIdx+1, visibleCount)))
+		// Page indicator
+		if totalPages > 1 {
+			b.WriteString(ScrollHintStyle.Width(panelW - 4).Render(fmt.Sprintf("第 %d/%d 页  [ ] 翻页  ↑↓ 选择节点", page+1, totalPages)))
+			b.WriteString("\n")
+		} else if visibleCount > 15 && m.nodeIdx > 10 {
+			b.WriteString(ScrollHintStyle.Width(panelW - 4).Render(fmt.Sprintf("↑ %d/%d ↑", m.nodeIdx+1, len(nodes))))
 			b.WriteString("\n")
 		}
 
@@ -548,7 +574,7 @@ func (m Model) renderSubsTab() string {
 	activeSub := m.cfgMgr.Config().ActiveSubscription
 
 	// Active hint
-	activeHint := "全部"
+	activeHint := "无"
 	if activeSub != "" {
 		activeHint = activeSub
 	}

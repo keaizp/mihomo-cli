@@ -181,6 +181,26 @@ func fixSubscriptionURL(rawURL string) (string, error) {
 	return u.String(), nil
 }
 
+// subLogPath returns the subscription log file path.
+func (m *Manager) subLogPath() string {
+	return filepath.Join(m.cfg.MihomoDir(), "logs", "subscription.log")
+}
+
+// subLog appends a timestamped line to the subscription log file.
+func (m *Manager) subLog(format string, args ...any) {
+	path := m.subLogPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	line := fmt.Sprintf("[%s] %s\n", time.Now().Format("2006-01-02 15:04:05"), fmt.Sprintf(format, args...))
+	f.WriteString(line)
+}
+
 // UpdateSubscription fetches a subscription by name with three-tier proxy fallback,
 // saves its profile, and updates its timestamp.
 // Matches Clash Verge Rev: feat/profile.rs perform_profile_update (lines 100-187).
@@ -201,7 +221,7 @@ func (m *Manager) UpdateSubscription(name string) error {
 	// 1. Direct connection (no proxy)
 	// 2. Through Clash localhost proxy (mixed port)
 	// 3. Through system proxy (environment variables)
-	subCfg, err := m.fetchWithFallback(sub.URL, appCfg.Core.MixedPort)
+	subCfg, err := m.fetchWithFallback(sub.Name, sub.URL, appCfg.Core.MixedPort)
 	if err != nil {
 		return fmt.Errorf("fetch %q: %w", name, err)
 	}
@@ -230,32 +250,32 @@ func (m *Manager) UpdateSubscription(name string) error {
 
 // fetchWithFallback tries three proxy methods in order, returning the first success.
 // Matches Clash Verge Rev's perform_profile_update three-tier fallback.
-func (m *Manager) fetchWithFallback(subURL string, mixedPort int) (*SubscriptionConfig, error) {
+func (m *Manager) fetchWithFallback(name, subURL string, mixedPort int) (*SubscriptionConfig, error) {
 	// Tier 1: Direct connection.
 	subCfg, err := m.fetch(subURL, nil)
 	if err == nil {
 		return subCfg, nil
 	}
-	fmt.Fprintf(os.Stderr, "[订阅] 直连失败: %v\n", err)
+	m.subLog("[%s] 直连失败: %v", name, err)
 
 	// Tier 2: Through Clash localhost proxy (self_proxy).
 	clashProxy := fmt.Sprintf("http://127.0.0.1:%d", mixedPort)
 	if pu, err2 := url.Parse(clashProxy); err2 == nil {
 		subCfg, err = m.fetch(subURL, &http.Transport{Proxy: http.ProxyURL(pu)})
 		if err == nil {
-			fmt.Fprintf(os.Stderr, "[订阅] Clash代理(127.0.0.1:%d) 成功\n", mixedPort)
+			m.subLog("[%s] Clash代理(127.0.0.1:%d) 成功", name, mixedPort)
 			return subCfg, nil
 		}
-		fmt.Fprintf(os.Stderr, "[订阅] Clash代理(127.0.0.1:%d) 失败: %v\n", mixedPort, err)
+		m.subLog("[%s] Clash代理(127.0.0.1:%d) 失败: %v", name, mixedPort, err)
 	}
 
 	// Tier 3: Through system proxy (with_proxy, via environment variables).
 	subCfg, err = m.fetch(subURL, &http.Transport{Proxy: http.ProxyFromEnvironment})
 	if err == nil {
-		fmt.Fprintf(os.Stderr, "[订阅] 系统代理 成功\n")
+		m.subLog("[%s] 系统代理 成功", name)
 		return subCfg, nil
 	}
-	fmt.Fprintf(os.Stderr, "[订阅] 系统代理 失败: %v\n", err)
+	m.subLog("[%s] 系统代理 失败: %v", name, err)
 
 	return nil, fmt.Errorf("all methods failed")
 }
@@ -280,8 +300,8 @@ func (m *Manager) MergeAndGenerate() error {
 
 	profilesDir := filepath.Join(m.cfg.ConfigDir(), "profiles")
 	for _, sub := range appCfg.Subscriptions {
-		// If an active subscription is set, only merge that one.
-		if appCfg.ActiveSubscription != "" && sub.Name != appCfg.ActiveSubscription {
+		// Only merge the active subscription. If none is active, skip all.
+		if appCfg.ActiveSubscription == "" || sub.Name != appCfg.ActiveSubscription {
 			continue
 		}
 		profilePath := filepath.Join(profilesDir, sub.Name+".yaml")

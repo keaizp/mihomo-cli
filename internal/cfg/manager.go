@@ -153,7 +153,7 @@ func (m *Manager) UpdateSubscription(name, url string) error {
 }
 
 // SetActiveSubscription sets the active subscription and saves.
-// Pass empty string to use all subscriptions.
+// Pass empty string to deactivate (use no subscriptions).
 func (m *Manager) SetActiveSubscription(name string) error {
 	if name != "" {
 		found := false
