@@ -3,6 +3,7 @@ package cfg
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
@@ -55,17 +56,31 @@ type Manager struct {
 	config    AppConfig
 }
 
+// userConfigDir returns the config directory, detecting sudo via SUDO_USER.
+func userConfigDir() (string, error) {
+	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" {
+		u, err := user.Lookup(sudoUser)
+		if err != nil {
+			return "", fmt.Errorf("lookup sudo user %q: %w", sudoUser, err)
+		}
+		return filepath.Join(u.HomeDir, ".config", "mihomo-cli"), nil
+	}
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, "mihomo-cli"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("get home dir: %w", err)
+	}
+	return filepath.Join(home, ".config", "mihomo-cli"), nil
+}
+
 // NewManager creates a Manager, loading config from XDG config dir.
 func NewManager() (*Manager, error) {
-	configDir := os.Getenv("XDG_CONFIG_HOME")
-	if configDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("get home dir: %w", err)
-		}
-		configDir = filepath.Join(home, ".config")
+	configDir, err := userConfigDir()
+	if err != nil {
+		return nil, err
 	}
-	configDir = filepath.Join(configDir, "mihomo-cli")
 
 	m := &Manager{configDir: configDir, config: DefaultAppConfig()}
 
@@ -186,9 +201,12 @@ func (m *Manager) UpdateSubscriptionTimestamp(name string, ts int64) error {
 func (m *Manager) ConfigDir() string { return m.configDir }
 
 // MihomoDir returns the mihomo working directory (kernel, logs, PID, generated config).
-// Uses a fixed system path so the daemon data is consistent regardless of which user
-// runs the CLI (e.g. sudo vs normal user).
-func (m *Manager) MihomoDir() string { return "/var/lib/mihomo-cli" }
+func (m *Manager) MihomoDir() string {
+	if d := os.Getenv("MIHOMO_DATA_DIR"); d != "" {
+		return d
+	}
+	return filepath.Join(m.configDir, "data")
+}
 
 // MihomoConfigPath returns the path to the generated mihomo config file.
 func (m *Manager) MihomoConfigPath() string {
