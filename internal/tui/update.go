@@ -39,7 +39,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case key.Matches(msg, Keys.Update):
+		case key.Matches(msg, Keys.Update) && m.tabIdx != 4:
 			if m.subMgr != nil {
 				m.subMgr.UpdateAll()
 				m.notification = "正在更新所有订阅..."
