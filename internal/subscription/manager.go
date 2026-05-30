@@ -1,10 +1,10 @@
 package subscription
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,16 +34,27 @@ func NewManager(cfgMgr *cfg.Manager) *Manager {
 }
 
 // Fetch downloads and decodes a subscription from the given URL.
+// Follows Clash Verge Rev's approach: no base64 decode, plain YAML expected.
 func (m *Manager) Fetch(subURL string) (*SubscriptionConfig, error) {
-	req, err := http.NewRequest("GET", subURL, nil)
+	cleanURL, err := fixSubscriptionURL(subURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL: %w", err)
+	}
+
+	req, err := http.NewRequest("GET", cleanURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("User-Agent", "clash-verge/1.0")
-	req.Header.Set("Accept", "*/*")
-	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("User-Agent", "clash-verge/v1.0.0")
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	// Extract username:password from URL and set Basic Auth header (matching Clash Verge Rev).
+	if u, err := url.Parse(subURL); err == nil && u.User != nil {
+		if pass, ok := u.User.Password(); ok {
+			req.SetBasicAuth(u.User.Username(), pass)
+		}
+	}
+
+	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch subscription: %w", err)
@@ -60,84 +71,72 @@ func (m *Manager) Fetch(subURL string) (*SubscriptionConfig, error) {
 		return nil, fmt.Errorf("read body: %w", err)
 	}
 
-	// Try raw body first (many servers return plain YAML / URI list).
-	if subCfg, ok := parseSubscription(body); ok {
-		return subCfg, nil
+	// Strip UTF-8 BOM if present (matching Clash Verge Rev).
+	if len(body) >= 3 && body[0] == 0xEF && body[1] == 0xBB && body[2] == 0xBF {
+		body = body[3:]
+	}
+	data := string(body)
+
+	// Parse as YAML (Clash Verge Rev does NOT base64-decode).
+	var root yaml.Node
+	if err := yaml.Unmarshal([]byte(data), &root); err != nil {
+		return nil, fmt.Errorf("invalid YAML: %w", err)
+	}
+	if root.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("expected YAML mapping, got kind %d", root.Kind)
 	}
 
-	// If raw body wasn't valid, try base64 decoding (classic Clash subscription format).
-	if decoded := decodeSubscriptionBody(body); decoded != nil {
-		if subCfg, ok := parseSubscription(decoded); ok {
-			return subCfg, nil
+	// Verify the response contains proxies or proxy-providers.
+	hasProxies := false
+	for i := 0; i < len(root.Content)-1; i += 2 {
+		key := root.Content[i]
+		if key.Kind == yaml.ScalarNode && (key.Value == "proxies" || key.Value == "proxy-providers") {
+			hasProxies = true
+			break
 		}
 	}
+	if !hasProxies {
+		return nil, fmt.Errorf("subscription does not contain `proxies` or `proxy-providers` key")
+	}
 
-	return nil, fmt.Errorf("no proxies found in subscription (body starts with: %.80s)", string(body))
-}
-
-// parseSubscription tries to parse a byte slice as a subscription config.
-func parseSubscription(data []byte) (*SubscriptionConfig, bool) {
+	// Now parse into SubscriptionConfig.
 	var subCfg SubscriptionConfig
-
-	// Try structured Clash YAML: proxies as list of maps.
-	if err := yaml.Unmarshal(data, &subCfg); err == nil && len(subCfg.Proxies) > 0 {
-		return &subCfg, true
+	if err := yaml.Unmarshal([]byte(data), &subCfg); err != nil {
+		return nil, fmt.Errorf("parse subscription: %w", err)
 	}
 
-	// Try "proxies" as list of URI strings (ss://..., vmess://...).
-	var wrapper struct {
-		Proxies []string `yaml:"proxies"`
-	}
-	if err := yaml.Unmarshal(data, &wrapper); err == nil && len(wrapper.Proxies) > 0 {
+	if len(subCfg.Proxies) == 0 {
+		// Maybe proxies are URI strings — try that format.
+		var wrapper struct {
+			Proxies []string `yaml:"proxies"`
+		}
+		if err := yaml.Unmarshal([]byte(data), &wrapper); err != nil || len(wrapper.Proxies) == 0 {
+			return nil, fmt.Errorf("no proxies found in subscription")
+		}
 		for _, uri := range wrapper.Proxies {
 			subCfg.Proxies = append(subCfg.Proxies, map[string]any{"__uri__": uri})
 		}
-		return &subCfg, true
 	}
 
-	// Try bare list of URI strings.
-	var proxiesRaw []string
-	if err := yaml.Unmarshal(data, &proxiesRaw); err == nil && len(proxiesRaw) > 0 {
-		for _, uri := range proxiesRaw {
-			subCfg.Proxies = append(subCfg.Proxies, map[string]any{"__uri__": uri})
-		}
-		return &subCfg, true
-	}
-
-	return nil, false
+	return &subCfg, nil
 }
 
-// decodeSubscriptionBody tries multiple base64 encodings.
-// Returns nil if the body doesn't look like base64 at all.
-func decodeSubscriptionBody(body []byte) []byte {
-	raw := strings.TrimSpace(string(body))
-
-	// Skip empty or obviously-not-base64 bodies.
-	if len(raw) == 0 || raw[0] == '{' || raw[0] == '-' {
-		return nil
+// fixSubscriptionURL handles malformed URLs where query params appear after & instead of ?.
+// Example: https://example.com/path&param1=value1 → https://example.com/path?param1=value1
+func fixSubscriptionURL(rawURL string) (string, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("parse URL: %w", err)
 	}
-
-	encodings := []*base64.Encoding{
-		base64.StdEncoding,
-		base64.RawStdEncoding,
-		base64.URLEncoding,
-		base64.RawURLEncoding,
-	}
-	for _, enc := range encodings {
-		if decoded, err := enc.DecodeString(raw); err == nil && looksLikeSubscription(decoded) {
-			return decoded
+	// If no query string but path contains '&', extract params from path.
+	if u.RawQuery == "" && strings.Contains(u.Path, "&") {
+		if idx := strings.Index(u.Path, "&"); idx >= 0 {
+			params := u.Path[idx+1:]
+			u.Path = u.Path[:idx]
+			u.RawQuery = params
 		}
 	}
-	return nil
-}
-
-// looksLikeSubscription checks if data appears to be a subscription config.
-func looksLikeSubscription(data []byte) bool {
-	s := strings.TrimSpace(string(data))
-	return strings.Contains(s, "proxies") ||
-		strings.Contains(s, "ss://") ||
-		strings.Contains(s, "vmess://") ||
-		strings.Contains(s, "trojan://")
+	return u.String(), nil
 }
 
 // UpdateSubscription fetches a subscription by name, saves its profile, and
