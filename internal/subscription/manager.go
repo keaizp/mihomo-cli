@@ -98,21 +98,46 @@ func (m *Manager) fetch(subURL string, transport *http.Transport) (*Subscription
 	if err := yaml.Unmarshal([]byte(data), &root); err != nil {
 		return nil, fmt.Errorf("invalid YAML: %w", err)
 	}
-	if root.Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("expected YAML mapping, got kind %d", root.Kind)
+	if root.Kind != yaml.DocumentNode || len(root.Content) == 0 {
+		return nil, fmt.Errorf("expected YAML document, got kind %d", root.Kind)
 	}
+	doc := root.Content[0]
 
 	// Verify the response contains proxies or proxy-providers (prfitem.rs lines 388-392).
-	hasProxies := false
-	for i := 0; i < len(root.Content)-1; i += 2 {
-		key := root.Content[i]
-		if key.Kind == yaml.ScalarNode && (key.Value == "proxies" || key.Value == "proxy-providers") {
-			hasProxies = true
-			break
+	if doc.Kind == yaml.MappingNode {
+		hasProxies := false
+		for i := 0; i < len(doc.Content)-1; i += 2 {
+			key := doc.Content[i]
+			if key.Kind == yaml.ScalarNode && (key.Value == "proxies" || key.Value == "proxy-providers") {
+				hasProxies = true
+				break
+			}
 		}
-	}
-	if !hasProxies {
-		return nil, fmt.Errorf("subscription does not contain `proxies` or `proxy-providers` key")
+		if !hasProxies {
+			return nil, fmt.Errorf("subscription does not contain `proxies` or `proxy-providers` key")
+		}
+	} else if doc.Kind == yaml.SequenceNode {
+		// Top-level sequence: treat each entry as a proxy URI string.
+		// Deserialize into []any first to get raw entries.
+		var rawProxies []any
+		if err := yaml.Unmarshal([]byte(data), &rawProxies); err != nil {
+			return nil, fmt.Errorf("parse proxy sequence: %w", err)
+		}
+		subCfg := &SubscriptionConfig{}
+		for _, p := range rawProxies {
+			switch v := p.(type) {
+			case string:
+				subCfg.Proxies = append(subCfg.Proxies, map[string]any{"__uri__": v})
+			case map[string]any:
+				subCfg.Proxies = append(subCfg.Proxies, v)
+			}
+		}
+		if len(subCfg.Proxies) == 0 {
+			return nil, fmt.Errorf("no proxies found in subscription")
+		}
+		return subCfg, nil
+	} else {
+		return nil, fmt.Errorf("unexpected YAML kind %d at document root", doc.Kind)
 	}
 
 	// Now parse into SubscriptionConfig.
