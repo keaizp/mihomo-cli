@@ -563,14 +563,14 @@ func (m Model) renderSubsTab() string {
 	}
 
 	// Header
-	b.WriteString(ListHeaderStyle.Render(fmt.Sprintf("  状态  %-16s  %-40s  %s", "名称", "URL", "更新间隔")))
+	b.WriteString(ListHeaderStyle.Render(fmt.Sprintf("  状态  %-16s  %-40s  %s", "名称", "URL", "上次更新")))
 	b.WriteString("\n")
 	b.WriteString(DividerStyle.Render("  " + strings.Repeat("─", panelW-8)))
 	b.WriteString("\n")
 
 	for i, s := range subs {
 		// Active marker: green ● for active, ○ for inactive
-		status := StatusStoppedStyle.Render("○")
+		status := MutedStyle.Render("○")
 		if s.Name == activeSub {
 			status = StatusRunningStyle.Render("●")
 		}
